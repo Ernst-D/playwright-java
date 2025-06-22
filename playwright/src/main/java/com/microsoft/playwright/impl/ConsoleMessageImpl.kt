@@ -13,63 +13,59 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.ConsoleMessage
+import com.microsoft.playwright.JSHandle
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.ConsoleMessage;
-import com.microsoft.playwright.JSHandle;
-import com.microsoft.playwright.Page;
+class ConsoleMessageImpl(private val connection: Connection, initializer: JsonObject) : ConsoleMessage
+{
+    private var page: PageImpl? = null
+    private val initializer: JsonObject
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static com.microsoft.playwright.impl.Serialization.gson;
-
-public class ConsoleMessageImpl implements ConsoleMessage {
-  private final Connection connection;
-  private PageImpl page;
-  private final JsonObject initializer;
-
-  public ConsoleMessageImpl(Connection connection, JsonObject initializer) {
-    this.connection = connection;
-    // Note: currently, we only report console messages for pages and they always have a page.
-    // However, in the future we might report console messages for service workers or something else,
-    // where page() would be null.
-    if (initializer.has("page")) {
-      page = connection.getExistingObject(initializer.getAsJsonObject("page").get("guid").getAsString());
+    init
+    {
+        // Note: currently, we only report console messages for pages and they always have a page.
+        // However, in the future we might report console messages for service workers or something else,
+        // where page() would be null.
+        if (initializer.has("page"))
+        {
+            page =
+                connection.getExistingObject<PageImpl?>(initializer.getAsJsonObject("page").get("guid").getAsString())
+        }
+        this.initializer = initializer
     }
-    this.initializer = initializer;
-  }
 
-  public String type() {
-    return initializer.get("type").getAsString();
-  }
-
-  public String text() {
-    return initializer.get("text").getAsString();
-  }
-
-  @Override
-  public List<JSHandle> args() {
-    List<JSHandle> result = new ArrayList<>();
-    for (JsonElement item : initializer.getAsJsonArray("args")) {
-      result.add(connection.getExistingObject(item.getAsJsonObject().get("guid").getAsString()));
+    override fun type(): String?
+    {
+        return initializer.get("type").getAsString()
     }
-    return result;
-  }
 
-  @Override
-  public String location() {
-    JsonObject location = initializer.getAsJsonObject("location");
-    return location.get("url").getAsString() + ":" +
-      location.get("lineNumber").getAsNumber() + ":" +
-      location.get("columnNumber").getAsNumber();
-  }
+    override fun text(): String?
+    {
+        return initializer.get("text").getAsString()
+    }
 
-  @Override
-  public PageImpl page() {
-    return page;
-  }
+    override fun args(): MutableList<JSHandle?>
+    {
+        val result: MutableList<JSHandle?> = ArrayList<JSHandle?>()
+        for (item in initializer.getAsJsonArray("args"))
+        {
+            result.add(connection.getExistingObject<JSHandle?>(item.getAsJsonObject().get("guid").getAsString()))
+        }
+        return result
+    }
+
+    override fun location(): String
+    {
+        val location = initializer.getAsJsonObject("location")
+        return location.get("url").getAsString() + ":" + location.get("lineNumber")
+            .getAsNumber() + ":" + location.get("columnNumber").getAsNumber()
+    }
+
+    override fun page(): PageImpl?
+    {
+        return page
+    }
 }
