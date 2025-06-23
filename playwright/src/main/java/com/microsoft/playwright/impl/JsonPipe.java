@@ -26,8 +26,6 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.function.Consumer;
 
-import static com.microsoft.playwright.impl.Serialization.gson;
-
 class JsonPipe extends ChannelOwner implements Transport {
   private final Queue<JsonObject> incoming = new LinkedList<>();
   private ListenerCollection<EventType> listeners = new ListenerCollection<>();
@@ -92,8 +90,9 @@ class JsonPipe extends ChannelOwner implements Transport {
   }
 
 
+  // used to be protected
   @Override
-  protected void handleEvent(String event, JsonObject params) {
+  public void handleEvent(String event, JsonObject params) {
     if ("message".equals(event)) {
       incoming.add(params.get("message").getAsJsonObject());
     } else if ("closed".equals(event)) {

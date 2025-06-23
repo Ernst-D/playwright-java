@@ -293,8 +293,9 @@ class BrowserImpl extends ChannelOwner implements Browser {
     return initializer.get("version").getAsString();
   }
 
+  // used to be protected, set later
   @Override
-  void handleEvent(String event, JsonObject parameters) {
+  public void handleEvent(String event, JsonObject parameters) {
     if ("close".equals(event)) {
       didClose();
     }

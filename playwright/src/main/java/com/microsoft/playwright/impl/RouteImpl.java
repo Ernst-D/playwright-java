@@ -18,7 +18,6 @@ package com.microsoft.playwright.impl;
 
 import com.google.gson.JsonObject;
 import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.RequestOptions;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

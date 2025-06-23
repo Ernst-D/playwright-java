@@ -18,7 +18,6 @@ package com.microsoft.playwright.impl;
 
 import com.google.gson.JsonObject;
 import com.microsoft.playwright.Dialog;
-import com.microsoft.playwright.Page;
 
 class DialogImpl extends ChannelOwner implements Dialog {
   private PageImpl page;

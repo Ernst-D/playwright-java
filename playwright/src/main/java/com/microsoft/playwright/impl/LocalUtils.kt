@@ -29,7 +29,7 @@ internal class LocalUtils(parent: ChannelOwner?, type: String?, guid: String?, i
 
     fun deviceDescriptors(): JsonArray?
     {
-        return initializer.getAsJsonArray("deviceDescriptors")
+        return initializer?.getAsJsonArray("deviceDescriptors")
     }
 
     fun zip(zipFile: Path, entries: JsonArray?, stacksId: String?, appendMode: Boolean, includeSources: Boolean)
@@ -58,7 +58,7 @@ internal class LocalUtils(parent: ChannelOwner?, type: String?, guid: String?, i
             params.addProperty("tracesDir", "")
         }
         params.addProperty("traceName", traceName)
-        val json = connection.localUtils().sendMessage("tracingStarted", params).getAsJsonObject()
-        return json.get("stacksId").getAsString()
+        val json = connection?.localUtils()?.sendMessage("tracingStarted", params)?.asJsonObject
+        return json?.get("stacksId")?.asString
     }
 }

@@ -149,8 +149,9 @@ class WebSocketImpl extends ChannelOwner implements WebSocket {
     return runUntil(code, new WaitableRace<>(waitables));
   }
 
+  // used to be private
   @Override
-  void handleEvent(String event, JsonObject parameters) {
+  public void handleEvent(String event, JsonObject parameters) {
     switch (event) {
       case "frameSent": {
         int opCode = parameters.get("opcode").getAsInt();

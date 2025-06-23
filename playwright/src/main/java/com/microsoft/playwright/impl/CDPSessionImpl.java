@@ -30,8 +30,9 @@ public class CDPSessionImpl extends ChannelOwner implements CDPSession {
     super(parent, type, guid, initializer);
   }
 
+  // used to be protected, set later
   @Override
-  void handleEvent(String event, JsonObject parameters) {
+  public void handleEvent(String event, JsonObject parameters) {
     super.handleEvent(event, parameters);
     if ("event".equals(event)) {
       String method = parameters.get("method").getAsString();

@@ -19,7 +19,7 @@ import com.google.gson.JsonObject
 import com.microsoft.playwright.ConsoleMessage
 import com.microsoft.playwright.JSHandle
 
-class ConsoleMessageImpl(private val connection: Connection, initializer: JsonObject) : ConsoleMessage
+internal class ConsoleMessageImpl(val connection: Connection, initializer: JsonObject) : ConsoleMessage
 {
     private var page: PageImpl? = null
     private val initializer: JsonObject

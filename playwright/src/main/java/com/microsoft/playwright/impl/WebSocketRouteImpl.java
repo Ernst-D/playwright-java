@@ -132,8 +132,9 @@ class WebSocketRouteImpl extends ChannelOwner implements WebSocketRoute {
     sendMessageAsync("ensureOpened");
   }
 
+  // used to protected
   @Override
-  protected void handleEvent(String event, JsonObject params) {
+  public void handleEvent(String event, JsonObject params) {
     if ("messageFromPage".equals(event)) {
       String message = params.get("message").getAsString();
       boolean isBase64 = params.get("isBase64").getAsBoolean();

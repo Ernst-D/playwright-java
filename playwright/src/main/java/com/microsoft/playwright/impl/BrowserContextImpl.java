@@ -736,8 +736,9 @@ class BrowserContextImpl extends ChannelOwner implements BrowserContext {
     return sendMessageAsync("pause", new JsonObject());
   }
 
+  // used to be protected, set later
   @Override
-  protected void handleEvent(String event, JsonObject params) {
+  public void handleEvent(String event, JsonObject params) {
     if ("dialog".equals(event)) {
       String guid = params.getAsJsonObject("dialog").get("guid").getAsString();
       DialogImpl dialog = connection.getExistingObject(guid);

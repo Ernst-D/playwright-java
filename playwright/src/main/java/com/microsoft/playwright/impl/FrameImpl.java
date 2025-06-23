@@ -1123,7 +1123,8 @@ public class FrameImpl extends ChannelOwner implements Frame {
     sendMessage("highlight", params);
   }
 
-  protected void handleEvent(String event, JsonObject params) {
+  // used to be protected
+  public void handleEvent(String event, JsonObject params) {
     if ("loadstate".equals(event)) {
       JsonElement add = params.get("add");
       if (add != null) {

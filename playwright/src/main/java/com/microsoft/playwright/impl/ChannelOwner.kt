@@ -13,134 +13,145 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.microsoft.playwright.PlaywrightException
+import java.util.function.Function
+import java.util.function.Supplier
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.PlaywrightException;
+internal open class ChannelOwner private constructor(
+  @JvmField val connection: Connection?,
+  private var parent: ChannelOwner?,
+  val type: String?,
+  @JvmField val guid: String?,
+  @JvmField val initializer: JsonObject?
+) : LoggingSupport()
+{
+    private val objects: MutableMap<String?, ChannelOwner> = HashMap<String?, ChannelOwner>()
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Supplier;
+    private var wasCollected = false
+    private var isInternalType = false
 
-class ChannelOwner extends LoggingSupport {
-  final Connection connection;
-  private ChannelOwner parent;
-  private final Map<String, ChannelOwner> objects = new HashMap<>();
+    constructor(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) : this(
+        parent?.connection, parent, type, guid, initializer
+    )
 
-  final String type;
-  final String guid;
-  final JsonObject initializer;
-  private boolean wasCollected;
-  private boolean isInternalType;
-
-  protected ChannelOwner(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    this(parent.connection, parent, type, guid, initializer);
-  }
-
-  protected ChannelOwner(Connection connection, String type, String guid) {
-    this(connection, null, type, guid, new JsonObject());
-  }
+    constructor(connection: Connection?, type: String?, guid: String?) : this(connection, null, type, guid, JsonObject())
 
 
-  private ChannelOwner(Connection connection, ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    this.connection = connection;
-    this.parent = parent;
-    this.type = type;
-    this.guid = guid;
-    this.initializer = initializer;
-
-    connection.registerObject(guid, this);
-    if (parent != null) {
-      parent.objects.put(guid, this);
+    init
+    {
+        connection?.registerObject(guid, this)
+        if (parent != null)
+        {
+            parent!!.objects.put(guid, this)
+        }
     }
-  }
 
-  void markAsInternalType() {
-    isInternalType = true;
-  }
-
-  void disposeChannelOwner(boolean wasGarbageCollected) {
-    // Clean up from parent and connection.
-    if (parent != null) {
-      parent.objects.remove(guid);
+    fun markAsInternalType()
+    {
+        isInternalType = true
     }
-    connection.unregisterObject(guid);
-    wasCollected = wasGarbageCollected;
-    // Dispose all children.
-    for (ChannelOwner child : new ArrayList<>(objects.values())) {
-      child.disposeChannelOwner(wasGarbageCollected);
+
+    fun disposeChannelOwner(wasGarbageCollected: Boolean)
+    {
+        // Clean up from parent and connection.
+        if (parent != null)
+        {
+            parent!!.objects.remove(guid)
+        }
+        connection?.unregisterObject(guid)
+        wasCollected = wasGarbageCollected
+        // Dispose all children.
+        for (child in ArrayList<ChannelOwner>(objects.values))
+        {
+            child.disposeChannelOwner(wasGarbageCollected)
+        }
+        objects.clear()
     }
-    objects.clear();
-  }
 
-  void adopt(ChannelOwner child) {
-    child.parent.objects.remove(child.guid);
-    objects.put(child.guid, child);
-    child.parent = this;
-  }
-
-  <T> T withWaitLogging(String apiName, Function<Logger, T> code) {
-    return new WaitForEventLogger<>(this, apiName, code).get();
-  }
-
-  @Override
-  <T> T withLogging(String apiName, Supplier<T> code) {
-    if (isInternalType) {
-      apiName = null;
+    fun adopt(child: ChannelOwner)
+    {
+        child.parent!!.objects.remove(child.guid)
+        objects.put(child.guid, child)
+        child.parent = this
     }
-    String previousApiName = connection.setApiName(apiName);
-    try {
-      return super.withLogging(apiName, code);
-    } finally {
-      connection.setApiName(previousApiName);
+
+    fun <T> withWaitLogging(apiName: String?, code: Function<Logger?, T?>?): T?
+    {
+        return WaitForEventLogger<T?>(this, apiName, code).get()
     }
-  }
 
-  WaitableResult<JsonElement> sendMessageAsync(String method) {
-    return sendMessageAsync(method, new JsonObject());
-  }
-
-  WaitableResult<JsonElement> sendMessageAsync(String method, JsonObject params) {
-    checkNotCollected();
-    return connection.sendMessageAsync(guid, method, params);
-  }
-
-  JsonElement sendMessage(String method) {
-    return sendMessage(method, new JsonObject());
-  }
-
-  JsonElement sendMessage(String method, JsonObject params) {
-    checkNotCollected();
-    return connection.sendMessage(guid, method, params);
-  }
-
-  private void checkNotCollected() {
-    if (wasCollected)
-      throw new PlaywrightException("The object has been collected to prevent unbounded heap growth.");
-  }
-
-  <T> T runUntil(Runnable code, Waitable<T> waitable) {
-    try {
-      code.run();
-      while (!waitable.isDone()) {
-        connection.processOneMessage();
-      }
-      return waitable.get();
-    } finally {
-      waitable.dispose();
+    override fun <T> withLogging(apiName: String?, code: Supplier<T?>): T?
+    {
+        var apiName = apiName
+        if (isInternalType)
+        {
+            apiName = null
+        }
+        val previousApiName = connection?.setApiName(apiName)
+        try
+        {
+            return super.withLogging<T?>(apiName, code)
+        } finally
+        {
+            connection?.setApiName(previousApiName)
+        }
     }
-  }
 
-  void handleEvent(String event, JsonObject parameters) {
-  }
+    fun sendMessageAsync(method: String): WaitableResult<JsonElement?>
+    {
+        return sendMessageAsync(method, JsonObject())
+    }
 
-  JsonObject toProtocolRef() {
-    JsonObject json = new JsonObject();
-    json.addProperty("guid", guid);
-    return json;
-  }
+    fun sendMessageAsync(method: String, params: JsonObject?): WaitableResult<JsonElement?>
+    {
+        checkNotCollected()
+        return connection!!.sendMessageAsync(guid, method, params)
+    }
+
+    fun sendMessage(method: String): JsonElement?
+    {
+        return sendMessage(method, JsonObject())
+    }
+
+    fun sendMessage(method: String, params: JsonObject?): JsonElement?
+    {
+        checkNotCollected()
+        return connection?.sendMessage(guid, method, params)
+    }
+
+    private fun checkNotCollected()
+    {
+        if (wasCollected) throw PlaywrightException("The object has been collected to prevent unbounded heap growth.")
+    }
+
+    fun <T> runUntil(code: Runnable, waitable: Waitable<T?>): T?
+    {
+        try
+        {
+            code.run()
+            while (!waitable.isDone())
+            {
+                connection?.processOneMessage()
+            }
+            return waitable.get()
+        } finally
+        {
+            waitable.dispose()
+        }
+    }
+
+    open fun handleEvent(event: String?, parameters: JsonObject?)
+    {
+    }
+
+    fun toProtocolRef(): JsonObject
+    {
+        val json = JsonObject()
+        json.addProperty("guid", guid)
+        return json
+    }
 }

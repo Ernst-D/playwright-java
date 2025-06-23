@@ -13,393 +13,409 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.microsoft.playwright.impl;
+package com.microsoft.playwright.impl
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.PlaywrightException;
-import com.microsoft.playwright.TimeoutError;
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.microsoft.playwright.PlaywrightException
+import com.microsoft.playwright.TimeoutError
+import java.io.IOException
+import java.lang.String
+import java.time.Duration
+import kotlin.Boolean
+import kotlin.Int
+import kotlin.Throws
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.text.contains
+import kotlin.text.isEmpty
+import kotlin.toString
 
-import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+internal class Message
+{
+    var id: Int = 0
+    var guid: kotlin.String? = null
+    var method: kotlin.String? = null
+    var params: JsonObject? = null
+    var result: JsonElement? = null
+    var error: SerializedError? = null
+    var log: JsonArray? = null
 
-import static com.microsoft.playwright.impl.Serialization.gson;
-import static java.lang.System.currentTimeMillis;
-
-class Message {
-  int id;
-  String guid;
-  String method;
-  JsonObject params;
-  JsonElement result;
-  SerializedError error;
-  JsonArray log;
-
-  @Override
-  public String toString() {
-    return "Message{" +
-      "id='" + id + '\'' +
-      ", guid='" + guid + '\'' +
-      ", method='" + method + '\'' +
-      ", params=" + (params == null ? null : "<...>") +
-      ", result='" + result + '\'' +
-      ", error='" + error + '\'' +
-      '}';
-  }
+    override fun toString(): kotlin.String
+    {
+        return "Message{" + "id='" + id + '\'' + ", guid='" + guid + '\'' + ", method='" + method + '\'' + ", params=" + (if (params == null) null else "<...>") + ", result='" + result + '\'' + ", error='" + error + '\'' + '}'
+    }
 }
 
 
-public class Connection {
-  private final Transport transport;
-  private final Map<String, ChannelOwner> objects = new HashMap<>();
-  private final Root root;
-  final boolean isRemote;
-  private int lastId = 0;
-  private final StackTraceCollector stackTraceCollector;
-  private final Map<Integer, WaitableResult<JsonElement>> callbacks = new HashMap<>();
-  private String apiName;
-  private static final boolean isLogging;
-  static {
-    String debug = System.getenv("DEBUG");
-    isLogging = (debug != null) && debug.contains("pw:channel");
-  }
-  LocalUtils localUtils;
-  PlaywrightImpl playwright;
-  final Map<String, String> env;
-  private int tracingCount;
+internal class Connection private constructor(transport: Transport, env: MutableMap<String?, String?>?, isRemote: Boolean)
+{
+    private val transport: Transport
+    private val objects: MutableMap<kotlin.String?, ChannelOwner> = HashMap<kotlin.String?, ChannelOwner>()
+    private val root: Root
+    @JvmField
+    val isRemote: Boolean
+    private var lastId = 0
+    private val stackTraceCollector: StackTraceCollector?
+    private val callbacks: MutableMap<Int?, WaitableResult<JsonElement?>> =
+        HashMap<Int?, WaitableResult<JsonElement?>>()
+    private var apiName: kotlin.String? = null
+    @JvmField
+    var localUtils: LocalUtils? = null
+    @JvmField
+    var playwright: PlaywrightImpl? = null
+    @JvmField
+    val env: MutableMap<String?, String?>?
+    private var tracingCount = 0
 
-  class Root extends ChannelOwner {
-    Root(Connection connection) {
-      super(connection, "Root", "");
-    }
-
-    PlaywrightImpl initialize() {
-      JsonObject params = new JsonObject();
-      params.addProperty("sdkLanguage", "java");
-      JsonElement result = sendMessage("initialize", params.getAsJsonObject());
-      return this.connection.getExistingObject(result.getAsJsonObject().getAsJsonObject("playwright").get("guid").getAsString());
-    }
-  }
-
-  Connection(Transport pipe, Map<String, String> env, LocalUtils localUtils) {
-    this(pipe, env, true);
-    this.localUtils = localUtils;
-  }
-
-  Connection(Transport transport, Map<String, String> env) {
-    this(transport, env, false);
-  }
-
-  private Connection(Transport transport, Map<String, String> env, boolean isRemote) {
-    this.env = env;
-    this.isRemote = isRemote;
-    if (isLogging) {
-      transport = new TransportLogger(transport);
-    }
-    this.transport = transport;
-    root = new Root(this);
-    stackTraceCollector = StackTraceCollector.createFromEnv(env);
-  }
-
-  void setIsTracing(boolean tracing) {
-    if (tracing) {
-      ++tracingCount;
-    } else {
-      --tracingCount;
-    }
-  }
-
-  String setApiName(String name) {
-    String previous = apiName;
-    apiName = name;
-    return previous;
-  }
-
-  void close() throws IOException {
-    transport.close();
-  }
-
-  public JsonElement sendMessage(String guid, String method, JsonObject params) {
-    return root.runUntil(() -> {}, sendMessageAsync(guid, method, params));
-  }
-
-  public WaitableResult<JsonElement> sendMessageAsync(String guid, String method, JsonObject params) {
-    return internalSendMessage(guid, method, params, true);
-  }
-
-  private WaitableResult<JsonElement> internalSendMessage(String guid, String method, JsonObject params, boolean sendStack) {
-    int id = ++lastId;
-    WaitableResult<JsonElement> result = new WaitableResult<>();
-    callbacks.put(id, result);
-    JsonObject message = new JsonObject();
-    message.addProperty("id", id);
-    message.addProperty("guid", guid);
-    message.addProperty("method", method);
-    message.add("params", params);
-    JsonObject metadata = new JsonObject();
-    metadata.addProperty("wallTime", currentTimeMillis());
-    JsonArray stack = null;
-    if (apiName == null) {
-      metadata.addProperty("internal", true);
-    } else {
-      metadata.addProperty("apiName", apiName);
-      // All but first message in an API call are considered internal and will be hidden from the inspector.
-      apiName = null;
-      if (stackTraceCollector != null) {
-        stack = stackTraceCollector.currentStackTrace();
-        if (!stack.isEmpty()) {
-          JsonObject location = new JsonObject();
-          JsonObject frame = stack.get(0).getAsJsonObject();
-          location.addProperty("file", frame.get("file").getAsString());
-          location.addProperty("line", frame.get("line").getAsInt());
-          location.addProperty("column", frame.get("column").getAsInt());
-          metadata.add("location", location);
+    internal inner class Root(connection: Connection?) : ChannelOwner(connection, "Root", "")
+    {
+        fun initialize(): PlaywrightImpl?
+        {
+            val params = JsonObject()
+            params.addProperty("sdkLanguage", "java")
+            val result = sendMessage("initialize", params.getAsJsonObject())
+            return this.connection?.getExistingObject<PlaywrightImpl?>(
+              result?.asJsonObject?.getAsJsonObject("playwright")?.get("guid")?.asString
+            )
         }
-      }
     }
-    message.add("metadata", metadata);
-    transport.send(message);
-    if (sendStack && tracingCount > 0 && stack != null && !method.startsWith("LocalUtils")) {
-      JsonObject callData = new JsonObject();
-      callData.addProperty("id", id);
-      callData.add("stack", stack);
-      JsonObject stackParams = new JsonObject();
-      stackParams.add("callData", callData);
-      internalSendMessage(localUtils.guid,"addStackToTracingNoReply", stackParams, false);
+
+    internal constructor(pipe: Transport, env: MutableMap<String?, String?>?, localUtils: LocalUtils?) : this(
+        pipe, env, true
+    )
+    {
+        this.localUtils = localUtils
     }
-    return result;
-  }
 
-  public PlaywrightImpl initializePlaywright() {
-    playwright = root.initialize();
-    return playwright;
-  }
+    internal constructor(transport: Transport, env: MutableMap<String?, String?>?) : this(transport, env, false)
 
-  LocalUtils localUtils() {
-    return localUtils;
-  }
-
-  public <T> T getExistingObject(String guid) {
-    @SuppressWarnings("unchecked") T result = (T) objects.get(guid);
-    if (result == null)
-      throw new PlaywrightException("Object doesn't exist: " + guid);
-    return result;
-  }
-
-  void registerObject(String guid, ChannelOwner object) {
-    objects.put(guid, object);
-  }
-
-  void unregisterObject(String guid) {
-    objects.remove(guid);
-  }
-
-  void processOneMessage() {
-    JsonObject message = transport.poll(Duration.ofMillis(10));
-    if (message == null) {
-      return;
+    init
+    {
+        var transport = transport
+        this.env = env
+        this.isRemote = isRemote
+        if (isLogging)
+        {
+            transport = TransportLogger(transport)
+        }
+        this.transport = transport
+        root = Root(this)
+        stackTraceCollector = StackTraceCollector.createFromEnv(env as Map<kotlin.String?, kotlin.String?>?)
     }
-    Gson gson = gson();
-    Message messageObj = gson.fromJson(message, Message.class);
-    dispatch(messageObj);
-  }
 
-  private static String formatCallLog(JsonArray log) {
-    if (log == null) {
-      return "";
+    fun setIsTracing(tracing: Boolean)
+    {
+        if (tracing)
+        {
+            ++tracingCount
+        } else
+        {
+            --tracingCount
+        }
     }
-    boolean allEmpty = true;
-    for (JsonElement e: log) {
-      if (!e.getAsString().isEmpty()) {
-        allEmpty = false;
-        break;
-      }
-    }
-    if (allEmpty) {
-      return "";
-    }
-    List<String> lines = new ArrayList<>();
-    lines.add("");
-    lines.add("Call log:");
-    for (JsonElement e: log) {
-      lines.add("- " + e.getAsString());
-    }
-    lines.add("");
-    return String.join("\n", lines);
-  }
 
-  private void dispatch(Message message) {
+    fun setApiName(name: kotlin.String?): kotlin.String?
+    {
+        val previous = apiName
+        apiName = name
+        return previous
+    }
+
+    @Throws(IOException::class)
+    fun close()
+    {
+        transport.close()
+    }
+
+    fun sendMessage(guid: kotlin.String?, method: kotlin.String, params: JsonObject?): JsonElement?
+    {
+        return root.runUntil<JsonElement?>(Runnable {}, sendMessageAsync(guid, method, params))
+    }
+
+    internal fun sendMessageAsync(guid: kotlin.String?, method: kotlin.String, params: JsonObject?): WaitableResult<JsonElement?>
+    {
+        return internalSendMessage(guid, method, params, true)
+    }
+
+    private fun internalSendMessage(
+      guid: kotlin.String?, method: kotlin.String, params: JsonObject?, sendStack: Boolean
+    ): WaitableResult<JsonElement?>
+    {
+        val id = ++lastId
+        val result = WaitableResult<JsonElement?>()
+        callbacks.put(id, result)
+        val message = JsonObject()
+        message.addProperty("id", id)
+        message.addProperty("guid", guid)
+        message.addProperty("method", method)
+        message.add("params", params)
+        val metadata = JsonObject()
+        metadata.addProperty("wallTime", System.currentTimeMillis())
+        var stack: JsonArray? = null
+        if (apiName == null)
+        {
+            metadata.addProperty("internal", true)
+        } else
+        {
+            metadata.addProperty("apiName", apiName)
+            // All but first message in an API call are considered internal and will be hidden from the inspector.
+            apiName = null
+            if (stackTraceCollector != null)
+            {
+                stack = stackTraceCollector.currentStackTrace()
+                if (!stack.isEmpty())
+                {
+                    val location = JsonObject()
+                    val frame = stack.get(0).getAsJsonObject()
+                    location.addProperty("file", frame.get("file").getAsString())
+                    location.addProperty("line", frame.get("line").getAsInt())
+                    location.addProperty("column", frame.get("column").getAsInt())
+                    metadata.add("location", location)
+                }
+            }
+        }
+        message.add("metadata", metadata)
+        transport.send(message)
+        if (sendStack && tracingCount > 0 && stack != null && !method.startsWith("LocalUtils"))
+        {
+            val callData = JsonObject()
+            callData.addProperty("id", id)
+            callData.add("stack", stack)
+            val stackParams = JsonObject()
+            stackParams.add("callData", callData)
+            internalSendMessage(localUtils!!.guid, "addStackToTracingNoReply", stackParams, false)
+        }
+        return result
+    }
+
+    fun initializePlaywright(): PlaywrightImpl?
+    {
+        playwright = root.initialize()
+        return playwright
+    }
+
+    fun localUtils(): LocalUtils?
+    {
+        return localUtils
+    }
+
+    fun <T> getExistingObject(guid: kotlin.String?): T?
+    {
+        val result = objects.get(guid) as T?
+        if (result == null) throw PlaywrightException("Object doesn't exist: " + guid)
+        return result
+    }
+
+    fun registerObject(guid: kotlin.String?, _object: ChannelOwner?)
+    {
+        objects.put(guid, _object!!)
+    }
+
+    fun unregisterObject(guid: kotlin.String?)
+    {
+        objects.remove(guid)
+    }
+
+    fun processOneMessage()
+    {
+        val message = transport.poll(Duration.ofMillis(10))
+        if (message == null)
+        {
+            return
+        }
+        val gson = Serialization.gson()
+        val messageObj = gson.fromJson<Message>(message, Message::class.java)
+        dispatch(messageObj)
+    }
+
+    private fun dispatch(message: Message)
+    {
 //    System.out.println("Message: " + message.method + " " + message.id);
-    if (message.id != 0) {
-      WaitableResult<JsonElement> callback = callbacks.get(message.id);
-      if (callback == null) {
-        throw new PlaywrightException("Cannot find command to respond: " + message.id);
-      }
-      callbacks.remove(message.id);
-//      System.out.println("Message: " + message.id + " " + message);
-      if (message.error == null) {
-        callback.complete(message.result);
-      } else {
-        String callLog = formatCallLog(message.log);
-        if (message.error.error == null) {
-          callback.completeExceptionally(new PlaywrightException(message.error + callLog));
-        } else if ("TimeoutError".equals(message.error.error.name)) {
-          callback.completeExceptionally(new TimeoutError(message.error.error + callLog));
-        } else if ("TargetClosedError".equals(message.error.error.name)) {
-          callback.completeExceptionally(new TargetClosedError(message.error.error + callLog));
-
-        } else {
-          callback.completeExceptionally(new DriverException(message.error.error + callLog));
+        if (message.id != 0)
+        {
+            val callback: WaitableResult<JsonElement?> = callbacks.get(message.id)!!
+            if (callback == null)
+            {
+                throw PlaywrightException("Cannot find command to respond: " + message.id)
+            }
+            callbacks.remove(message.id)
+            //      System.out.println("Message: " + message.id + " " + message);
+            if (message.error == null)
+            {
+                callback.complete(message.result)
+            } else
+            {
+                val callLog: kotlin.String? = formatCallLog(message.log)
+                if (message.error!!.error == null)
+                {
+                    callback.completeExceptionally(PlaywrightException(message.error.toString() + callLog))
+                } else if ("TimeoutError" == message.error!!.error.name)
+                {
+                    callback.completeExceptionally(TimeoutError(message.error!!.error.toString() + callLog))
+                } else if ("TargetClosedError" == message.error!!.error.name)
+                {
+                    callback.completeExceptionally(TargetClosedError(message.error!!.error.toString() + callLog))
+                } else
+                {
+                    callback.completeExceptionally(DriverException(message.error!!.error.toString() + callLog))
+                }
+            }
+            return
         }
-      }
-      return;
-    }
 
-    // TODO: throw?
-    if (message.method == null) {
-      return;
-    }
-    if (message.method.equals("__create__")) {
-      createRemoteObject(message.guid, message.params);
-      return;
-    }
-
-    ChannelOwner object = objects.get(message.guid);
-    if (object == null) {
-      throw new PlaywrightException("Cannot find object to call " + message.method + ": " + message.guid);
-    }
-    if (message.method.equals("__adopt__")) {
-      String childGuid = message.params.get("guid").getAsString();
-      ChannelOwner child = objects.get(childGuid);
-      if (child == null) {
-        throw new PlaywrightException("Unknown new child:  " + childGuid);
-      }
-      object.adopt(child);
-      return;
-    }
-    if (message.method.equals("__dispose__")) {
-      boolean wasCollected = message.params.has("reason") && "gc".equals(message.params.get("reason").getAsString());
-      object.disposeChannelOwner(wasCollected);
-      return;
-    }
-    object.handleEvent(message.method, message.params);
-  }
-
-  private ChannelOwner createRemoteObject(String parentGuid, JsonObject params) {
-    String type = params.get("type").getAsString();
-    String guid = params.get("guid").getAsString();
-
-    ChannelOwner parent = objects.get(parentGuid);
-    if (parent == null) {
-      throw new PlaywrightException("Cannot find parent object " + parentGuid + " to create " + guid);
-    }
-    JsonObject initializer = params.getAsJsonObject("initializer");
-    ChannelOwner result = null;
-    switch (type) {
-      case "Android":
-//        result = new Android(parent, type, guid, initializer);
-        break;
-      case "AndroidSocket":
-//        result = new AndroidSocket(parent, type, guid, initializer);
-        break;
-      case "AndroidDevice":
-//        result = new AndroidDevice(parent, type, guid, initializer);
-        break;
-      case "Artifact":
-        result = new ArtifactImpl(parent, type, guid, initializer);
-        break;
-      case "BindingCall":
-        result = new BindingCall(parent, type, guid, initializer);
-        break;
-      case "BrowserType":
-        result = new BrowserTypeImpl(parent, type, guid, initializer);
-        break;
-      case "Browser":
-        result = new BrowserImpl(parent, type, guid, initializer);
-        break;
-      case "BrowserContext":
-        result = new BrowserContextImpl(parent, type, guid, initializer);
-        break;
-      case "Dialog":
-        result = new DialogImpl(parent, type, guid, initializer);
-        break;
-      case "Electron":
-//        result = new Playwright(parent, type, guid, initializer);
-        break;
-      case "ElementHandle":
-        result = new ElementHandleImpl(parent, type, guid, initializer);
-        break;
-      case "APIRequestContext":
-        // Create fake object as this API is experimental an only exposed in Node.js.
-        result = new APIRequestContextImpl(parent, type, guid, initializer);
-        break;
-      case "Frame":
-        result = new FrameImpl(parent, type, guid, initializer);
-        break;
-      case "JSHandle":
-        result = new JSHandleImpl(parent, type, guid, initializer);
-        break;
-      case "JsonPipe":
-        result = new JsonPipe(parent, type, guid, initializer);
-        break;
-      case "LocalUtils":
-        result = new LocalUtils(parent, type, guid, initializer);
-        if (localUtils == null) {
-          localUtils = (LocalUtils) result;
+        // TODO: throw?
+        if (message.method == null)
+        {
+            return
         }
-        break;
-      case "Page":
-        result = new PageImpl(parent, type, guid, initializer);
-        break;
-      case "Playwright":
-        result = new PlaywrightImpl(parent, type, guid, initializer);
-        break;
-      case "Request":
-        result = new RequestImpl(parent, type, guid, initializer);
-        break;
-      case "Response":
-        result = new ResponseImpl(parent, type, guid, initializer);
-        break;
-      case "Route":
-        result = new RouteImpl(parent, type, guid, initializer);
-        break;
-      case "Stream":
-        result = new Stream(parent, type, guid, initializer);
-        break;
-      case "Selectors":
-        result = new SelectorsImpl(parent, type, guid, initializer);
-        break;
-      case "SocksSupport":
-        break;
-      case "Tracing":
-        result = new TracingImpl(parent, type, guid, initializer);
-        break;
-      case "WebSocket":
-        result = new WebSocketImpl(parent, type, guid, initializer);
-        break;
-      case "WebSocketRoute":
-        result = new WebSocketRouteImpl(parent, type, guid, initializer);
-        break;
-      case "Worker":
-        result = new WorkerImpl(parent, type, guid, initializer);
-        break;
-      case "WritableStream":
-        result = new WritableStream(parent, type, guid, initializer);
-        break;
-      case "CDPSession":
-        result = new CDPSessionImpl(parent, type, guid, initializer);
-        break;
-      default:
-        throw new PlaywrightException("Unknown type " + type);
+        if (message.method == "__create__")
+        {
+            createRemoteObject(message.guid, message.params!!)
+            return
+        }
+
+        val `object`: ChannelOwner = objects.get(message.guid)!!
+        if (`object` == null)
+        {
+            throw PlaywrightException("Cannot find object to call " + message.method + ": " + message.guid)
+        }
+        if (message.method == "__adopt__")
+        {
+            val childGuid = message.params!!.get("guid").asString
+            val child: ChannelOwner = objects.get(childGuid)!!
+            if (child == null)
+            {
+                throw PlaywrightException("Unknown new child:  " + childGuid)
+            }
+            `object`.adopt(child)
+            return
+        }
+        if (message.method == "__dispose__")
+        {
+            val wasCollected = message.params!!.has("reason") && "gc" == message.params!!.get("reason").getAsString()
+            `object`.disposeChannelOwner(wasCollected)
+            return
+        }
+        `object`.handleEvent(message.method as kotlin.String?, message.params)
     }
 
-    return result;
-  }
+    private fun createRemoteObject(parentGuid: kotlin.String?, params: JsonObject): ChannelOwner?
+    {
+        val type = params.get("type").getAsString()
+        val guid = params.get("guid").getAsString()
+
+        val parent: ChannelOwner = objects.get(parentGuid)!!
+        if (parent == null)
+        {
+            throw PlaywrightException("Cannot find parent object " + parentGuid + " to create " + guid)
+        }
+        val initializer = params.getAsJsonObject("initializer")
+        var result: ChannelOwner? = null
+        when (type)
+        {
+            "Android" ->
+            {
+            }
+
+            "AndroidSocket" ->
+            {
+            }
+
+            "AndroidDevice" ->
+            {
+            }
+
+            "Artifact" -> result = ArtifactImpl(parent, type, guid, initializer)
+            "BindingCall" -> result = BindingCall(parent, type, guid, initializer)
+            "BrowserType" -> result = BrowserTypeImpl(parent, type, guid, initializer)
+            "Browser" -> result = BrowserImpl(parent, type, guid, initializer)
+            "BrowserContext" -> result = BrowserContextImpl(parent, type, guid, initializer)
+            "Dialog" -> result = DialogImpl(parent, type, guid, initializer)
+            "Electron" ->
+            {
+            }
+
+            "ElementHandle" -> result = ElementHandleImpl(parent, type, guid, initializer)
+            "APIRequestContext" ->         // Create fake object as this API is experimental an only exposed in Node.js.
+                result = APIRequestContextImpl(parent, type, guid, initializer)
+
+            "Frame" -> result = FrameImpl(parent, type, guid, initializer)
+            "JSHandle" -> result = JSHandleImpl(parent, type, guid, initializer)
+            "JsonPipe" -> result = JsonPipe(parent, type, guid, initializer)
+            "LocalUtils" ->
+            {
+                result = LocalUtils(parent, type, guid, initializer)
+                if (localUtils == null)
+                {
+                    localUtils = result
+                }
+            }
+
+            "Page" -> result = PageImpl(parent, type, guid, initializer)
+            "Playwright" -> result = PlaywrightImpl(parent, type, guid, initializer)
+            "Request" -> result = RequestImpl(parent, type, guid, initializer)
+            "Response" -> result = ResponseImpl(parent, type, guid, initializer)
+            "Route" -> result = RouteImpl(parent, type, guid, initializer)
+            "Stream" -> result = Stream(parent, type, guid, initializer)
+            "Selectors" -> result = SelectorsImpl(parent, type, guid, initializer)
+            "SocksSupport" ->
+            {
+            }
+
+            "Tracing" -> result = TracingImpl(parent, type, guid, initializer)
+            "WebSocket" -> result = WebSocketImpl(parent, type, guid, initializer)
+            "WebSocketRoute" -> result = WebSocketRouteImpl(parent, type, guid, initializer)
+            "Worker" -> result = WorkerImpl(parent, type, guid, initializer)
+            "WritableStream" -> result = WritableStream(parent, type, guid, initializer)
+            "CDPSession" -> result = CDPSessionImpl(parent, type, guid, initializer)
+            else -> throw PlaywrightException("Unknown type " + type)
+        }
+
+        return result
+    }
+
+    companion object
+    {
+        private val isLogging: Boolean
+
+        init
+        {
+            val debug = System.getenv("DEBUG")
+            isLogging = (debug != null) && debug.contains("pw:channel")
+        }
+
+        private fun formatCallLog(log: JsonArray?): kotlin.String?
+        {
+            if (log == null)
+            {
+                return ""
+            }
+            var allEmpty = true
+            for (e in log)
+            {
+                if (!e.getAsString().isEmpty())
+                {
+                    allEmpty = false
+                    break
+                }
+            }
+            if (allEmpty)
+            {
+                return ""
+            }
+            val lines: MutableList<kotlin.String?> = ArrayList()
+            lines.add("")
+            lines.add("Call log:")
+            for (e in log)
+            {
+                lines.add("- " + e.getAsString())
+            }
+            lines.add("")
+            return String.join("\n", lines)
+        }
+    }
 }

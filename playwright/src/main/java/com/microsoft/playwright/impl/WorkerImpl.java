@@ -97,8 +97,9 @@ class WorkerImpl extends ChannelOwner implements Worker {
     return initializer.get("url").getAsString();
   }
 
+  // used to protected
   @Override
-  protected void handleEvent(String event, JsonObject params) {
+  public void handleEvent(String event, JsonObject params) {
     if ("close".equals(event)) {
       if (page != null) {
         page.workers.remove(this);

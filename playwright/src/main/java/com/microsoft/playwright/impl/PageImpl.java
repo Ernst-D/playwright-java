@@ -144,8 +144,9 @@ public class PageImpl extends ChannelOwner implements Page {
     }
   }
 
+  // used to be protected
   @Override
-  protected void handleEvent(String event, JsonObject params) {
+  public void handleEvent(String event, JsonObject params) {
     if ("worker".equals(event)) {
       String guid = params.getAsJsonObject("worker").get("guid").getAsString();
       WorkerImpl worker = connection.getExistingObject(guid);

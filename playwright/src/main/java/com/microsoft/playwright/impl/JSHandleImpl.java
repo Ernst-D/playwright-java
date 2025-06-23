@@ -107,8 +107,9 @@ public class JSHandleImpl extends ChannelOwner implements JSHandle {
     });
   }
 
+  // used to be private
   @Override
-  void handleEvent(String event, JsonObject parameters) {
+  public void handleEvent(String event, JsonObject parameters) {
     if ("previewUpdated".equals(event)) {
       preview = parameters.get("preview").getAsString();
     }
