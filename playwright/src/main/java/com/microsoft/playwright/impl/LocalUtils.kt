@@ -13,50 +13,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import java.nio.file.Path
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-
-import java.nio.file.Path;
-import java.util.List;
-
-import static com.microsoft.playwright.impl.Serialization.gson;
-
-class LocalUtils extends ChannelOwner {
-  LocalUtils(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-    markAsInternalType();
-  }
-
-  JsonArray deviceDescriptors() {
-    return initializer.getAsJsonArray("deviceDescriptors");
-  }
-
-  void zip(Path zipFile, JsonArray entries, String stacksId, boolean appendMode, boolean includeSources) {
-    JsonObject params = new JsonObject();
-    params.addProperty("zipFile", zipFile.toString());
-    params.add("entries", entries);
-    params.addProperty("mode", appendMode ? "append" : "write");
-    params.addProperty("stacksId", stacksId);
-    params.addProperty("includeSources", includeSources);
-    sendMessage("zip", params);
-  }
-
-  void traceDiscarded(String stacksId) {
-    JsonObject params = new JsonObject();
-    params.addProperty("stacksId", stacksId);
-    sendMessage("traceDiscarded", params);
-  }
-
-  String tracingStarted(String tracesDir, String traceName) {
-    JsonObject params = new JsonObject();
-    if (tracesDir != null) {
-      params.addProperty("tracesDir", "");
+internal class LocalUtils(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) :
+    ChannelOwner(parent, type, guid, initializer)
+{
+    init
+    {
+        markAsInternalType()
     }
-    params.addProperty("traceName", traceName);
-    JsonObject json = connection.localUtils().sendMessage("tracingStarted", params).getAsJsonObject();
-    return json.get("stacksId").getAsString();
-  }
+
+    fun deviceDescriptors(): JsonArray?
+    {
+        return initializer.getAsJsonArray("deviceDescriptors")
+    }
+
+    fun zip(zipFile: Path, entries: JsonArray?, stacksId: String?, appendMode: Boolean, includeSources: Boolean)
+    {
+        val params = JsonObject()
+        params.addProperty("zipFile", zipFile.toString())
+        params.add("entries", entries)
+        params.addProperty("mode", if (appendMode) "append" else "write")
+        params.addProperty("stacksId", stacksId)
+        params.addProperty("includeSources", includeSources)
+        sendMessage("zip", params)
+    }
+
+    fun traceDiscarded(stacksId: String?)
+    {
+        val params = JsonObject()
+        params.addProperty("stacksId", stacksId)
+        sendMessage("traceDiscarded", params)
+    }
+
+    fun tracingStarted(tracesDir: String?, traceName: String?): String?
+    {
+        val params = JsonObject()
+        if (tracesDir != null)
+        {
+            params.addProperty("tracesDir", "")
+        }
+        params.addProperty("traceName", traceName)
+        val json = connection.localUtils().sendMessage("tracingStarted", params).getAsJsonObject()
+        return json.get("stacksId").getAsString()
+    }
 }
