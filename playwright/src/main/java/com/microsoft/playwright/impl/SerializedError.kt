@@ -1,31 +1,33 @@
-package com.microsoft.playwright.impl;
+package com.microsoft.playwright.impl
 
 
-public class SerializedError{
-  public static class Error {
-    String message;
-    String name;
-    String stack;
+class SerializedError
+{
+    class Error
+    {
+        @JvmField
+        var message: String? = null
+        @JvmField
+        var name: String? = null
+        @JvmField
+        var stack: String? = null
 
-    @Override
-    public String toString() {
-      return "Error {\n" +
-        "  message='" + message + '\n' +
-        "  name='" + name + '\n' +
-        "  stack='" + stack + '\n' +
-        '}';
+        override fun toString(): String
+        {
+            return "Error {\n" + "  message='" + message + '\n' + "  name='" + name + '\n' + "  stack='" + stack + '\n' + '}'
+        }
     }
-  }
-  Error error;
-  SerializedValue value;
 
-  @Override
-  public String toString() {
-    if (error != null) {
-      return error.toString();
+    @JvmField
+    var error: Error? = null
+    private var value: SerializedValue? = null
+
+    override fun toString(): String
+    {
+        if (error != null)
+        {
+            return error.toString()
+        }
+        return "SerializedError{" + "value=" + value + '}'
     }
-    return "SerializedError{" +
-      "value=" + value +
-      '}';
-  }
 }

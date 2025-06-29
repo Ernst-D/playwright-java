@@ -253,10 +253,10 @@ internal class Connection private constructor(transport: Transport, env: Mutable
                 if (message.error!!.error == null)
                 {
                     callback.completeExceptionally(PlaywrightException(message.error.toString() + callLog))
-                } else if ("TimeoutError" == message.error!!.error.name)
+                } else if ("TimeoutError" == message.error!!.error!!.name)
                 {
                     callback.completeExceptionally(TimeoutError(message.error!!.error.toString() + callLog))
-                } else if ("TargetClosedError" == message.error!!.error.name)
+                } else if ("TargetClosedError" == message.error!!.error!!.name)
                 {
                     callback.completeExceptionally(TargetClosedError(message.error!!.error.toString() + callLog))
                 } else
