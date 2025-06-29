@@ -1,5 +1,6 @@
 package com.microsoft.playwright.impl
 
+// part of the protocol.java
 internal class SerializedValue
 {
     @JvmField
