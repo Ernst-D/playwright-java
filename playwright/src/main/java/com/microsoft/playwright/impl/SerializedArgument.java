@@ -18,27 +18,7 @@
 
 package com.microsoft.playwright.impl;
 
-import java.util.List;
-
 class SerializedArgument{
   SerializedValue value;
   Channel[] handles;
 }
-
-class FrameExpectOptions {
-  Object expressionArg;
-  List<ExpectedTextValue> expectedText;
-  Double expectedNumber;
-  SerializedArgument expectedValue;
-  Boolean useInnerText;
-  boolean isNot;
-  Double timeout;
-}
-
-class FrameExpectResult {
-  boolean matches;
-  SerializedValue received;
-  List<String> log;
-}
-
-
