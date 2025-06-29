@@ -20,22 +20,9 @@ package com.microsoft.playwright.impl;
 
 import java.util.List;
 
-class Channel {
-  String guid;
-}
-
 class SerializedArgument{
   SerializedValue value;
   Channel[] handles;
-}
-
-class ExpectedTextValue {
-  String string;
-  String regexSource;
-  String regexFlags;
-  Boolean ignoreCase;
-  Boolean matchSubstring;
-  Boolean normalizeWhiteSpace;
 }
 
 class FrameExpectOptions {
