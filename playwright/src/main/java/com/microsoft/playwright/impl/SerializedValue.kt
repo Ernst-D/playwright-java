@@ -1,42 +1,72 @@
-package com.microsoft.playwright.impl;
+package com.microsoft.playwright.impl
 
-class SerializedValue {
-  Number n;
-  Boolean b;
-  String s;
-  // Possible values: { 'null, 'undefined, 'NaN, 'Infinity, '-Infinity, '-0 }
-  String v;
-  String d;
-  String u;
-  String bi;
+internal class SerializedValue
+{
+    @JvmField
+    var n: Number? = null
+    @JvmField
+    var b: Boolean? = null
+    @JvmField
+    var s: String? = null
 
-  public static class E {
-    String m;
-    String n;
-    String s;
-  }
+    // Possible values: { 'null, 'undefined, 'NaN, 'Infinity, '-Infinity, '-0 }
+    @JvmField
+    var v: String? = null
+    @JvmField
+    var d: String? = null
+    @JvmField
+    var u: String? = null
+    @JvmField
+    var bi: String? = null
 
-  E e;
+    class E
+    {
+        @JvmField
+        var m: String? = null
+        @JvmField
+        var n: String? = null
+        @JvmField
+        var s: String? = null
+    }
 
-  public static class R {
-    String p;
-    String f;
-  }
+    @JvmField
+    var e: E? = null
 
-  R r;
-  SerializedValue[] a;
+    class R
+    {
+        @JvmField
+        var p: String? = null
+        @JvmField
+        var f: String? = null
+    }
 
-  public static class O {
-    String k;
-    SerializedValue v;
-  }
+    @JvmField
+    var r: R? = null
+    @JvmField
+    var a: Array<SerializedValue?>? = null
 
-  O[] o;
-  Number h;
-  Integer id;
-  Integer ref;
-  // JS representation of Map: [[key1, value1], [key2, value2], ...].
-  SerializedValue m;
-  // JS representation of Set: [item1, item2, ...].
-  SerializedValue se;
+    class O
+    {
+        @JvmField
+        var k: String? = null
+        @JvmField
+        var v: SerializedValue? = null
+    }
+
+    @JvmField
+    var o: Array<O?>? = null
+    @JvmField
+    var h: Number? = null
+    @JvmField
+    var id: Int? = null
+    @JvmField
+    var ref: Int? = null
+
+    // JS representation of Map: [[key1, value1], [key2, value2], ...].
+    @JvmField
+    var m: SerializedValue? = null
+
+    // JS representation of Set: [item1, item2, ...].
+    @JvmField
+    var se: SerializedValue? = null
 }
