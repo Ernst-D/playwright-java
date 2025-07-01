@@ -18,15 +18,12 @@ package com.microsoft.playwright.impl;
 
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.impl.serialization.*;
 import com.microsoft.playwright.options.*;
 
 import java.io.*;
-import java.lang.reflect.Type;
 import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -271,83 +268,11 @@ public class Serialization {
     return result;
   }
 
-  private static class ToLowerCaseAndDashSerializer<E extends Enum<E>> implements JsonSerializer<E> {
-    @Override
-    public JsonElement serialize(E src, Type typeOfSrc, JsonSerializationContext context) {
-      return new JsonPrimitive(src.toString().toLowerCase().replace('_', '-'));
-    }
-  }
-
-  private static class PathSerializer implements JsonSerializer<Path> {
-    @Override
-    public JsonElement serialize(Path src, Type typeOfSrc, JsonSerializationContext context) {
-      return new JsonPrimitive(src.toString());
-    }
-  }
-
-  private static class ToLowerCaseSerializer<E extends Enum<E>> implements JsonSerializer<E> {
-    @Override
-    public JsonElement serialize(E src, Type typeOfSrc, JsonSerializationContext context) {
-      return new JsonPrimitive(src.toString().toLowerCase());
-    }
-  }
-
-  private static class SameSiteAdapter extends TypeAdapter<SameSiteAttribute> {
-    @Override
-    public void write(JsonWriter out, SameSiteAttribute value) throws IOException {
-      String stringValue;
-      switch (value) {
-        case STRICT:
-          stringValue = "Strict";
-          break;
-        case LAX:
-          stringValue = "Lax";
-          break;
-        case NONE:
-          stringValue = "None";
-          break;
-        default:
-          throw new PlaywrightException("Unexpected value: " + value);
-      }
-      out.value(stringValue);
-    }
-
-    @Override
-    public SameSiteAttribute read(JsonReader in) throws IOException {
-      String value = in.nextString();
-      return SameSiteAttribute.valueOf(value.toUpperCase());
-    }
-  }
-
   private static DateFormat iso8601Format() {
     DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault());
     dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
     return dateFormat;
   }
-  private static final DateFormat dateFormat = iso8601Format();
-
-  private static class DateSerializer implements JsonSerializer<Date> {
-    @Override
-    public JsonElement serialize(Date src, Type typeOfSrc, JsonSerializationContext context) {
-      return new JsonPrimitive(dateFormat.format(src));
-    }
-  }
-
-  private static class OffsetDateTimeSerializer implements JsonSerializer<OffsetDateTime> {
-    @Override
-    public JsonElement serialize(OffsetDateTime src, Type typeOfSrc, JsonSerializationContext context) {
-      return new JsonPrimitive(dateFormat.format(Date.from(src.toInstant())));
-    }
-  }
-
-  private static class LocalDateTimeSerializer implements JsonSerializer<LocalDateTime> {
-    @Override
-    public JsonElement serialize(LocalDateTime src, Type typeOfSrc, JsonSerializationContext context) {
-      ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(src);
-      Instant instant = src.toInstant(offset);
-      return new JsonPrimitive(dateFormat.format(Date.from(instant)));
-    }
-  }
-
+  public static final DateFormat dateFormat = iso8601Format();
 }
 
