@@ -41,7 +41,7 @@ import java.util.regex.Pattern;
 import static com.microsoft.playwright.impl.Utils.toJsRegexFlags;
 import static com.microsoft.playwright.impl.Utils.fromJsRegexFlags;
 
-class Serialization {
+public class Serialization {
   private static final Gson gson = new GsonBuilder().disableHtmlEscaping()
     .registerTypeAdapter(Date.class, new DateSerializer())
     .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeSerializer())
@@ -210,7 +210,7 @@ class Serialization {
     return jsonElements;
   }
 
-  static JsonArray toProtocol(Map<String, String> map) {
+  public static JsonArray toProtocol(Map<String, String> map) {
     for (String value : map.values()) {
       if (value == null) {
         throw new PlaywrightException("Value cannot be null");
@@ -269,16 +269,6 @@ class Serialization {
       result.add(e.getAsString());
     }
     return result;
-  }
-
-  private static class StringMapSerializer implements JsonSerializer<Map<String, String>> {
-    @Override
-    public JsonElement serialize(Map<String, String> src, Type typeOfSrc, JsonSerializationContext context) {
-      if (!"java.util.Map<java.lang.String, java.lang.String>".equals(typeOfSrc.getTypeName())) {
-        throw new PlaywrightException("Unexpected map type: " + typeOfSrc);
-      }
-      return toProtocol(src);
-    }
   }
 
   private static class ToLowerCaseAndDashSerializer<E extends Enum<E>> implements JsonSerializer<E> {
