@@ -22,6 +22,7 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.impl.serialization.HandleSerializer;
 import com.microsoft.playwright.impl.serialization.KeyboardModifiersSerializer;
 import com.microsoft.playwright.impl.serialization.OptionalSerializer;
 import com.microsoft.playwright.impl.serialization.ValueSerializer;
@@ -271,13 +272,6 @@ class Serialization {
       result.add(e.getAsString());
     }
     return result;
-  }
-
-  private static class HandleSerializer implements JsonSerializer<JSHandleImpl> {
-    @Override
-    public JsonElement serialize(JSHandleImpl src, Type typeOfSrc, JsonSerializationContext context) {
-      return src.toProtocolRef();
-    }
   }
 
   private static class FirefoxUserPrefsSerializer implements JsonSerializer<Map<String, Object>> {
