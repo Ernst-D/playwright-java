@@ -22,10 +22,7 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.PlaywrightException;
-import com.microsoft.playwright.impl.serialization.HandleSerializer;
-import com.microsoft.playwright.impl.serialization.KeyboardModifiersSerializer;
-import com.microsoft.playwright.impl.serialization.OptionalSerializer;
-import com.microsoft.playwright.impl.serialization.ValueSerializer;
+import com.microsoft.playwright.impl.serialization.*;
 import com.microsoft.playwright.options.*;
 
 import java.io.*;
@@ -272,16 +269,6 @@ class Serialization {
       result.add(e.getAsString());
     }
     return result;
-  }
-
-  private static class FirefoxUserPrefsSerializer implements JsonSerializer<Map<String, Object>> {
-    @Override
-    public JsonElement serialize(Map<String, Object> src, Type typeOfSrc, JsonSerializationContext context) {
-      if (!"java.util.Map<java.lang.String, java.lang.Object>".equals(typeOfSrc.getTypeName())) {
-        throw new PlaywrightException("Unexpected map type: " + typeOfSrc);
-      }
-      return context.serialize(src, Map.class);
-    }
   }
 
   private static class StringMapSerializer implements JsonSerializer<Map<String, String>> {
