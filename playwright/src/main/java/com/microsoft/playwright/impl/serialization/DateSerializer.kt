@@ -1,18 +1,17 @@
-package com.microsoft.playwright.impl.serialization;
+package com.microsoft.playwright.impl.serialization
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonPrimitive;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import com.google.gson.JsonElement
+import com.google.gson.JsonPrimitive
+import com.google.gson.JsonSerializationContext
+import com.google.gson.JsonSerializer
+import com.microsoft.playwright.impl.Serialization
+import java.lang.reflect.Type
+import java.util.*
 
-import java.lang.reflect.Type;
-import java.util.Date;
-
-import static com.microsoft.playwright.impl.Serialization.dateFormat;
-
-public class DateSerializer implements JsonSerializer<Date> {
-  @Override
-  public JsonElement serialize(Date src, Type typeOfSrc, JsonSerializationContext context) {
-    return new JsonPrimitive(dateFormat.format(src));
-  }
+class DateSerializer : JsonSerializer<Date?>
+{
+    override fun serialize(src: Date?, typeOfSrc: Type?, context: JsonSerializationContext?): JsonElement
+    {
+        return JsonPrimitive(Serialization.dateFormat.format(src))
+    }
 }
