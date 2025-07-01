@@ -22,6 +22,7 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.impl.serialization.KeyboardModifiersSerializer;
 import com.microsoft.playwright.options.*;
 
 import java.io.*;
@@ -304,29 +305,6 @@ class Serialization {
       return (T) map;
     }
     throw new PlaywrightException("Unexpected result: " + gson().toJson(value));
-  }
-
-  private static class KeyboardModifiersSerializer implements JsonSerializer<List<KeyboardModifier>> {
-    @Override
-    public JsonArray serialize(List<KeyboardModifier> modifiers, Type typeOfSrc, JsonSerializationContext context) {
-      JsonArray result = new JsonArray();
-      if (modifiers.contains(KeyboardModifier.ALT)) {
-        result.add("Alt");
-      }
-      if (modifiers.contains(KeyboardModifier.CONTROL)) {
-        result.add("Control");
-      }
-      if (modifiers.contains(KeyboardModifier.CONTROLORMETA)) {
-        result.add("ControlOrMeta");
-      }
-      if (modifiers.contains(KeyboardModifier.META)) {
-        result.add("Meta");
-      }
-      if (modifiers.contains(KeyboardModifier.SHIFT)) {
-        result.add("Shift");
-      }
-      return result;
-    }
   }
 
   static JsonArray toJsonArray(Path[] files) {
