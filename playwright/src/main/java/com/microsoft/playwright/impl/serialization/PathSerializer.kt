@@ -1,16 +1,16 @@
-package com.microsoft.playwright.impl.serialization;
+package com.microsoft.playwright.impl.serialization
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonPrimitive;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import com.google.gson.JsonElement
+import com.google.gson.JsonPrimitive
+import com.google.gson.JsonSerializationContext
+import com.google.gson.JsonSerializer
+import java.lang.reflect.Type
+import java.nio.file.Path
 
-import java.lang.reflect.Type;
-import java.nio.file.Path;
-
-public class PathSerializer implements JsonSerializer<Path> {
-  @Override
-  public JsonElement serialize(Path src, Type typeOfSrc, JsonSerializationContext context) {
-    return new JsonPrimitive(src.toString());
-  }
+class PathSerializer : JsonSerializer<Path?>
+{
+    override fun serialize(src: Path?, typeOfSrc: Type?, context: JsonSerializationContext?): JsonElement
+    {
+        return JsonPrimitive(src.toString())
+    }
 }
