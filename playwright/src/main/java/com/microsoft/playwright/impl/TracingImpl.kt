@@ -13,144 +13,171 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.microsoft.playwright.Tracing
+import com.microsoft.playwright.Tracing.*
+import java.nio.file.Path
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.Tracing;
-
-import java.nio.file.Path;
-
-import static com.microsoft.playwright.impl.Serialization.gson;
-
-class TracingImpl extends ChannelOwner implements Tracing {
-  private boolean includeSources;
-  private Path tracesDir;
-  private boolean isTracing;
-  private String stacksId;
+internal class TracingImpl(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) :
+    ChannelOwner(parent, type, guid, initializer), Tracing
+{
+    private var includeSources = false
+    private var tracesDir: Path? = null
+    private var isTracing = false
+    private var stacksId: String? = null
 
 
-  TracingImpl(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-    markAsInternalType();
-  }
-
-  private void stopChunkImpl(Path path) {
-    if (isTracing) {
-      isTracing = false;
-      connection.setIsTracing(false);
-    }
-    JsonObject params = new JsonObject();
-
-    // Not interested in artifacts.
-    if (path == null) {
-      params.addProperty("mode", "discard");
-      sendMessage("tracingStopChunk", params);
-      if (stacksId != null) {
-        connection.localUtils().traceDiscarded(stacksId);
-      }
-      return;
+    init
+    {
+        markAsInternalType()
     }
 
-    boolean isLocal = !connection.isRemote;
-    if (isLocal) {
-      params.addProperty("mode", "entries");
-      JsonObject json = sendMessage("tracingStopChunk", params).getAsJsonObject();
-      JsonArray entries = json.getAsJsonArray("entries");
-      connection.localUtils.zip(path, entries, stacksId, false, includeSources);
-      return;
+    private fun stopChunkImpl(path: Path?)
+    {
+        if (isTracing)
+        {
+            isTracing = false
+            connection!!.setIsTracing(false)
+        }
+        val params = JsonObject()
+
+        // Not interested in artifacts.
+        if (path == null)
+        {
+            params.addProperty("mode", "discard")
+            sendMessage("tracingStopChunk", params)
+            if (stacksId != null)
+            {
+                connection!!.localUtils()!!.traceDiscarded(stacksId)
+            }
+            return
+        }
+
+        val isLocal = !connection!!.isRemote
+        if (isLocal)
+        {
+            params.addProperty("mode", "entries")
+            val json = sendMessage("tracingStopChunk", params)!!.asJsonObject
+            val entries = json.getAsJsonArray("entries")
+            connection.localUtils!!.zip(path, entries, stacksId, false, includeSources)
+            return
+        }
+
+        params.addProperty("mode", "archive")
+        val json = sendMessage("tracingStopChunk", params)!!.getAsJsonObject()
+        // The artifact may be missing if the browser closed while stopping tracing.
+        if (!json.has("artifact"))
+        {
+            if (stacksId != null)
+            {
+                connection.localUtils()!!.traceDiscarded(stacksId)
+            }
+            return
+        }
+        val artifact =
+            connection.getExistingObject<ArtifactImpl?>(json.getAsJsonObject("artifact").get("guid").getAsString())
+        artifact!!.saveAs(path)
+        artifact.delete()
+
+        connection.localUtils!!.zip(path, JsonArray(), stacksId, true, includeSources)
     }
 
-    params.addProperty("mode", "archive");
-    JsonObject json = sendMessage("tracingStopChunk", params).getAsJsonObject();
-    // The artifact may be missing if the browser closed while stopping tracing.
-    if (!json.has("artifact")) {
-      if (stacksId != null) {
-        connection.localUtils().traceDiscarded(stacksId);
-      }
-      return;
+    override fun startChunk(options: StartChunkOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = StartChunkOptions()
+        }
+        tracingStartChunk(options.name, options.title)
     }
-    ArtifactImpl artifact = connection.getExistingObject(json.getAsJsonObject("artifact").get("guid").getAsString());
-    artifact.saveAs(path);
-    artifact.delete();
 
-    connection.localUtils.zip(path, new JsonArray(), stacksId, true, includeSources);
-  }
-
-  @Override
-  public void startChunk(StartChunkOptions options) {
-    if (options == null) {
-      options = new StartChunkOptions();
+    override fun group(name: String?, options: GroupOptions?)
+    {
+        withLogging("Tracing.group") {
+          groupImpl(name, options)
+        }
     }
-    tracingStartChunk(options.name, options.title);
-  }
 
-  @Override
-  public void group(String name, GroupOptions options) {
-    withLogging("Tracing.group", () -> groupImpl(name, options));
-  }
-
-  private void groupImpl(String name, GroupOptions options) {
-    if (options == null) {
-      options = new GroupOptions();
+    private fun groupImpl(name: String?, options: GroupOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = GroupOptions()
+        }
+        val params = Serialization.gson().toJsonTree(options).getAsJsonObject()
+        params.addProperty("name", name)
+        sendMessage("tracingGroup", params)
     }
-    JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-    params.addProperty("name", name);
-    sendMessage("tracingGroup", params);
-  }
 
-  @Override
-  public void groupEnd() {
-    withLogging("Tracing.groupEnd", () -> sendMessage("tracingGroupEnd"));
-  }
-
-  private void tracingStartChunk(String name, String title) {
-    JsonObject params = new JsonObject();
-    if (name != null) {
-      params.addProperty("name", name);
+    override fun groupEnd()
+    {
+        withLogging<JsonElement?>("Tracing.groupEnd") {
+          sendMessage("tracingGroupEnd")
+        }
     }
-    if (title != null) {
-      params.addProperty("title", title);
+
+    private fun tracingStartChunk(name: String?, title: String?)
+    {
+        val params = JsonObject()
+        if (name != null)
+        {
+            params.addProperty("name", name)
+        }
+        if (title != null)
+        {
+            params.addProperty("title", title)
+        }
+        val result = sendMessage("tracingStartChunk", params)!!.getAsJsonObject()
+        startCollectingStacks(result.get("traceName").getAsString())
     }
-    JsonObject result = sendMessage("tracingStartChunk", params).getAsJsonObject();
-    startCollectingStacks(result.get("traceName").getAsString());
-  }
 
-  private void startCollectingStacks(String traceName) {
-    if (!isTracing) {
-      isTracing = true;
-      connection.setIsTracing(true);
+    private fun startCollectingStacks(traceName: String?)
+    {
+        if (!isTracing)
+        {
+            isTracing = true
+            connection!!.setIsTracing(true)
+        }
+        stacksId =
+            connection!!.localUtils()!!.tracingStarted(if (tracesDir == null) null else tracesDir.toString(), traceName)
     }
-    stacksId = connection.localUtils().tracingStarted(tracesDir == null ? null : tracesDir.toString(), traceName);
-  }
 
-  @Override
-  public void start(StartOptions options) {
-    if (options == null) {
-      options = new StartOptions();
+    override fun start(options: StartOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = StartOptions()
+        }
+        val params = Serialization.gson().toJsonTree(options).getAsJsonObject()
+        includeSources = options.sources != null && options.sources
+        if (includeSources)
+        {
+            params.addProperty("sources", true)
+        }
+        sendMessage("tracingStart", params)
+        tracingStartChunk(options.name, options.title)
     }
-    JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-    includeSources = options.sources != null && options.sources;
-    if (includeSources) {
-      params.addProperty("sources", true);
+
+    override fun stop(options: StopOptions?)
+    {
+        stopChunkImpl(options?.path)
+        sendMessage("tracingStop")
     }
-    sendMessage("tracingStart", params);
-    tracingStartChunk(options.name, options.title);
-  }
 
-  @Override
-  public void stop(StopOptions options) {
-    stopChunkImpl(options == null ? null : options.path);
-    sendMessage("tracingStop");
-  }
+    override fun stopChunk(options: StopChunkOptions?)
+    {
+        stopChunkImpl(options?.path)
+    }
 
-  @Override
-  public void stopChunk(StopChunkOptions options) {
-    stopChunkImpl(options == null ? null : options.path);
-  }
-
-  void setTracesDir(Path tracesDir) {
-    this.tracesDir = tracesDir;
-  }
+    fun setTracesDir(tracesDir: Path?)
+    {
+        this.tracesDir = tracesDir
+    }
 }
