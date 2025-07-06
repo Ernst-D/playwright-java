@@ -21,7 +21,7 @@ import com.microsoft.playwright.PlaywrightException
 import java.util.function.Function
 import java.util.function.Supplier
 
-internal open class ChannelOwner private constructor(
+internal open class ChannelOwner (
   @JvmField val connection: Connection?,
   private var parent: ChannelOwner?,
   val type: String?,

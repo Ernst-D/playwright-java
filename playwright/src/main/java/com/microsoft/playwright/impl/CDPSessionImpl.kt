@@ -13,64 +13,64 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.CDPSession
+import java.util.function.Consumer
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.CDPSession;
+internal class CDPSessionImpl(
+    parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?
+) : ChannelOwner(parent, type, guid, initializer), CDPSession
+{
+    private val listeners = ListenerCollection<String?>(HashMap<String?, String?>(), this)
 
-import java.util.HashMap;
-import java.util.function.Consumer;
-
-public class CDPSessionImpl extends ChannelOwner implements CDPSession {
-  private final ListenerCollection<String> listeners = new ListenerCollection<>(new HashMap<>(), this);
-
-  protected CDPSessionImpl(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-  }
-
-  // used to be protected, set later
-  @Override
-  public void handleEvent(String event, JsonObject parameters) {
-    super.handleEvent(event, parameters);
-    if ("event".equals(event)) {
-      String method = parameters.get("method").getAsString();
-      JsonObject params = null;
-      if (parameters.has("params")) {
-        params = parameters.get("params").getAsJsonObject();
-      }
-      listeners.notify(method, params);
+    // used to be protected, set later
+    override fun handleEvent(event: String?, parameters: JsonObject?)
+    {
+        super.handleEvent(event, parameters)
+        if ("event" == event)
+        {
+            val method = parameters?.get("method")?.asString
+            var params: JsonObject? = null
+            if (parameters?.has("params")!!)
+            {
+                params = parameters.get("params").asJsonObject
+            }
+            listeners.notify<JsonObject?>(method, params)
+        }
     }
-  }
 
-  public JsonObject send(String method) {
-    return send(method, null);
-  }
-
-  public JsonObject send(String method, JsonObject params) {
-    JsonObject args = new JsonObject();
-    if (params != null) {
-      args.add("params", params);
+    override fun send(method: String?): JsonObject?
+    {
+        return send(method, null)
     }
-    args.addProperty("method", method);
-    JsonElement response = connection.sendMessage(guid, "send", args);
-    if (response == null) return null;
-    else return response.getAsJsonObject().get("result").getAsJsonObject();
-  }
 
-  @Override
-  public void on(String event, Consumer<JsonObject> handler) {
-    listeners.add(event, handler);
-  }
+    override fun send(method: String?, params: JsonObject?): JsonObject?
+    {
+        val args = JsonObject()
+        if (params != null)
+        {
+            args.add("params", params)
+        }
+        args.addProperty("method", method)
+        val response = connection!!.sendMessage(guid, "send", args)
+        if (response == null) return null
+        else return response.asJsonObject.get("result").asJsonObject
+    }
 
-  @Override
-  public void off(String event, Consumer<JsonObject> handler) {
-    listeners.remove(event, handler);
-  }
+    override fun on(event: String?, handler: Consumer<JsonObject?>?)
+    {
+        listeners.add(event, handler)
+    }
 
-  @Override
-  public void detach() {
-    sendMessage("detach");
-  }
+    override fun off(event: String?, handler: Consumer<JsonObject?>?)
+    {
+        listeners.remove(event, handler)
+    }
+
+    override fun detach()
+    {
+        sendMessage("detach")
+    }
 }
