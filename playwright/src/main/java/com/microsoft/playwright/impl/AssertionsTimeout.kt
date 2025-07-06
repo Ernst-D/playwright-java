@@ -13,18 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.microsoft.playwright.PlaywrightException
 
-import com.microsoft.playwright.PlaywrightException;
+object AssertionsTimeout
+{
+    @JvmField
+    var defaultTimeout: Double = 5000.0
 
-public class AssertionsTimeout {
-  static double defaultTimeout = 5_000;
-
-  public static void setDefaultTimeout(double ms) {
-    if (ms < 0) {
-      throw new PlaywrightException("Timeout cannot be negative");
+    @JvmStatic
+    fun setDefaultTimeout(ms: Double)
+    {
+        if (ms < 0)
+        {
+            throw PlaywrightException("Timeout cannot be negative")
+        }
+        defaultTimeout = ms
     }
-    defaultTimeout = ms;
-  }
 }
