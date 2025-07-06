@@ -1,36 +1,33 @@
-package com.microsoft.playwright.impl.serialization;
+package com.microsoft.playwright.impl.serialization
 
-import com.google.gson.TypeAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-import com.microsoft.playwright.PlaywrightException;
-import com.microsoft.playwright.options.SameSiteAttribute;
+import com.google.gson.TypeAdapter
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
+import com.microsoft.playwright.PlaywrightException
+import com.microsoft.playwright.options.SameSiteAttribute
+import java.io.IOException
+import java.util.*
 
-import java.io.IOException;
-
-public class SameSiteAdapter extends TypeAdapter<SameSiteAttribute> {
-  @Override
-  public void write(JsonWriter out, SameSiteAttribute value) throws IOException {
-    String stringValue;
-    switch (value) {
-      case STRICT:
-        stringValue = "Strict";
-        break;
-      case LAX:
-        stringValue = "Lax";
-        break;
-      case NONE:
-        stringValue = "None";
-        break;
-      default:
-        throw new PlaywrightException("Unexpected value: " + value);
+class SameSiteAdapter : TypeAdapter<SameSiteAttribute?>()
+{
+    @Throws(IOException::class)
+    override fun write(out: JsonWriter?, value: SameSiteAttribute?)
+    {
+        val stringValue: String?
+        when (value)
+        {
+            SameSiteAttribute.STRICT -> stringValue = "Strict"
+            SameSiteAttribute.LAX -> stringValue = "Lax"
+            SameSiteAttribute.NONE -> stringValue = "None"
+            else -> throw PlaywrightException("Unexpected value: " + value)
+        }
+        out?.value(stringValue)
     }
-    out.value(stringValue);
-  }
 
-  @Override
-  public SameSiteAttribute read(JsonReader in) throws IOException {
-    String value = in.nextString();
-    return SameSiteAttribute.valueOf(value.toUpperCase());
-  }
+    @Throws(IOException::class)
+    override fun read(`in`: JsonReader): SameSiteAttribute
+    {
+        val value = `in`.nextString()
+        return SameSiteAttribute.valueOf(value.uppercase(Locale.getDefault()))
+    }
 }
