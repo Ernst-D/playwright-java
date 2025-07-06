@@ -10,24 +10,23 @@ import java.util.*
 
 class SameSiteAdapter : TypeAdapter<SameSiteAttribute?>()
 {
-    @Throws(IOException::class)
-    override fun write(out: JsonWriter?, value: SameSiteAttribute?)
+  @Throws(IOException::class)
+  override fun write(out: JsonWriter?, value: SameSiteAttribute?)
+  {
+    val stringValue = when (value)
     {
-        val stringValue: String?
-        when (value)
-        {
-            SameSiteAttribute.STRICT -> stringValue = "Strict"
-            SameSiteAttribute.LAX -> stringValue = "Lax"
-            SameSiteAttribute.NONE -> stringValue = "None"
-            else -> throw PlaywrightException("Unexpected value: " + value)
-        }
-        out?.value(stringValue)
+      SameSiteAttribute.STRICT -> "Strict"
+      SameSiteAttribute.LAX -> "Lax"
+      SameSiteAttribute.NONE -> "None"
+      else -> throw PlaywrightException("Unexpected value: " + value)
     }
+    out?.value(stringValue)
+  }
 
-    @Throws(IOException::class)
-    override fun read(`in`: JsonReader): SameSiteAttribute
-    {
-        val value = `in`.nextString()
-        return SameSiteAttribute.valueOf(value.uppercase(Locale.getDefault()))
-    }
+  @Throws(IOException::class)
+  override fun read(`in`: JsonReader): SameSiteAttribute
+  {
+    val value = `in`.nextString()
+    return SameSiteAttribute.valueOf(value.uppercase(Locale.getDefault()))
+  }
 }
