@@ -13,96 +13,124 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import org.opentest4j.AssertionFailedError
+import org.opentest4j.ValueWrapper
+import java.lang.String
+import java.util.*
+import java.util.regex.Pattern
+import java.util.stream.Collectors
+import kotlin.Any
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.text.isEmpty
+import kotlin.toString
 
-import com.microsoft.playwright.PlaywrightException;
-import org.opentest4j.AssertionFailedError;
-import org.opentest4j.ValueWrapper;
-
-import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static com.microsoft.playwright.impl.Utils.toJsRegexFlags;
-import static java.util.Arrays.asList;
-
-class AssertionsBase {
-  final LocatorImpl actualLocator;
-  final boolean isNot;
-
-  AssertionsBase(LocatorImpl actual, boolean isNot) {
-    this.actualLocator = actual;
-    this.isNot = isNot;
-  }
-
-  void expectImpl(String expression, ExpectedTextValue textValue, Object expected, String message, FrameExpectOptions options) {
-    expectImpl(expression, asList(textValue), expected, message, options);
-  }
-
-  void expectImpl(String expression, List<ExpectedTextValue> expectedText, Object expected, String message, FrameExpectOptions options) {
-    if (options == null) {
-      options = new FrameExpectOptions();
+internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @JvmField val isNot: Boolean)
+{
+    fun expectImpl(
+        expression: kotlin.String, textValue: ExpectedTextValue, expected: Any?, message: kotlin.String, options: FrameExpectOptions?
+    )
+    {
+        expectImpl(expression, Arrays.asList<ExpectedTextValue?>(textValue), expected, message, options)
     }
-    options.expectedText = expectedText;
-    expectImpl(expression, options, expected, message);
-  }
 
-  void expectImpl(String expression, FrameExpectOptions expectOptions, Object expected, String message) {
-    if (expectOptions.timeout == null) {
-      expectOptions.timeout = AssertionsTimeout.defaultTimeout;
+    fun expectImpl(
+        expression: kotlin.String,
+        expectedText: MutableList<ExpectedTextValue?>?,
+        expected: Any?,
+        message: kotlin.String,
+        options: FrameExpectOptions?
+    )
+    {
+        var options = options
+        if (options == null)
+        {
+            options = FrameExpectOptions()
+        }
+        options.expectedText = expectedText
+        expectImpl(expression, options, expected, message)
     }
-    expectOptions.isNot = isNot;
-    if (isNot) {
-      message = message.replace("expected to", "expected not to");
-    }
-    FrameExpectResult result = actualLocator.expect(expression, expectOptions);
-    if (result.matches == isNot) {
-      Object actual = result.received == null ? null : Serialization.deserialize(result.received);
-      String log = (result.log == null) ? "" : String.join("\n", result.log);
-      if (!log.isEmpty()) {
-        log = "\nCall log:\n" + log;
-      }
-      if (expected == null) {
-        throw new AssertionFailedError(message + log);
-      }
-      ValueWrapper expectedValue = formatValue(expected);
-      ValueWrapper actualValue = formatValue(actual);
-      message += ": " + expectedValue.getStringRepresentation() + "\nReceived: " + actualValue.getStringRepresentation() + "\n";
-      throw new AssertionFailedError(message + log, expectedValue, actualValue);
-    }
-  }
 
-  private static ValueWrapper formatValue(Object value) {
-    if (value == null || !value.getClass().isArray()) {
-      return ValueWrapper.create(value);
+    fun expectImpl(expression: kotlin.String, expectOptions: FrameExpectOptions, expected: Any?, message: kotlin.String)
+    {
+        var message: kotlin.String = message
+        if (expectOptions.timeout == null)
+        {
+            expectOptions.timeout = AssertionsTimeout.defaultTimeout
+        }
+        expectOptions.isNot = isNot
+        if (isNot)
+        {
+            message = message.replace("expected to", "expected not to")
+        }
+        val result = actualLocator.expect(expression, expectOptions)
+        if (result.matches == isNot)
+        {
+            val actual = if (result.received == null) null else Serialization.deserialize<Any?>(result.received)
+            var log = if (result.log == null) "" else String.join("\n", result.log)
+            if (!log.isEmpty())
+            {
+                log = "\nCall log:\n" + log
+            }
+            if (expected == null)
+            {
+                throw AssertionFailedError(message + log)
+            }
+            val expectedValue: ValueWrapper = formatValue(expected)
+            val actualValue: ValueWrapper = formatValue(actual)
+            message += ": " + expectedValue.getStringRepresentation() + "\nReceived: " + actualValue.getStringRepresentation() + "\n"
+            throw AssertionFailedError(message + log, expectedValue, actualValue)
+        }
     }
-    Collection<String> values = asList((Object[]) value).stream().map(e -> e.toString()).collect(Collectors.toList());
-    String stringRepresentation = "[" + String.join(", ", values) + "]";
-    return ValueWrapper.create(value, stringRepresentation);
-  }
 
-  static ExpectedTextValue expectedRegex(Pattern pattern) {
-    ExpectedTextValue expected = new ExpectedTextValue();
-    expected.regexSource = pattern.pattern();
-    if (pattern.flags() != 0) {
-      expected.regexFlags = toJsRegexFlags(pattern);
-    }
-    return expected;
-  }
+    companion object
+    {
+        private fun formatValue(value: Any?): ValueWrapper
+        {
+            if (value == null || !value.javaClass.isArray())
+            {
+                return ValueWrapper.create(value)
+            }
+            val values: MutableCollection<kotlin.String?> =
+                Arrays.asList<Any?>(*value as Array<Any?>).stream().map<kotlin.String?> { e: Any? -> e.toString() }
+                    .collect(Collectors.toList())
+            val stringRepresentation = "[" + String.join(", ", values) + "]"
+            return ValueWrapper.create(value, stringRepresentation)
+        }
 
-  static Boolean shouldIgnoreCase(Object options) {
-    if (options == null) {
-      return null;
+        @JvmStatic
+        fun expectedRegex(pattern: Pattern): ExpectedTextValue
+        {
+            val expected = ExpectedTextValue()
+            expected.regexSource = pattern.pattern()
+            if (pattern.flags() != 0)
+            {
+                expected.regexFlags = Utils.toJsRegexFlags(pattern)
+            }
+            return expected
+        }
+
+        @JvmStatic
+        fun shouldIgnoreCase(options: Any?): Boolean?
+        {
+            if (options == null)
+            {
+                return null
+            }
+            try
+            {
+                val fromField = options.javaClass.getDeclaredField("ignoreCase")
+                val value = fromField.get(options)
+                return value as Boolean?
+            } catch (e: NoSuchFieldException)
+            {
+                return null
+            } catch (e: IllegalAccessException)
+            {
+                return null
+            }
+        }
     }
-    try {
-      Field fromField = options.getClass().getDeclaredField("ignoreCase");
-      Object value = fromField.get(options);
-      return (Boolean) value;
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      return null;
-    }
-  }
 }
