@@ -13,76 +13,78 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.BrowserContext
+import com.microsoft.playwright.Frame
+import com.microsoft.playwright.JSHandle
+import com.microsoft.playwright.Page
+import com.microsoft.playwright.options.BindingCallback
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.Frame;
-import com.microsoft.playwright.JSHandle;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.options.BindingCallback;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static com.microsoft.playwright.impl.Serialization.*;
-
-class BindingCall extends ChannelOwner {
-  private static class SourceImpl implements BindingCallback.Source {
-    private final Frame frame;
-
-    public SourceImpl(Frame frame) {
-      this.frame = frame;
-    }
-
-    @Override
-    public BrowserContext context() {
-      return page().context();
-    }
-
-    @Override
-    public Page page() {
-      return frame.page();
-    }
-
-    @Override
-    public Frame frame() {
-      return frame;
-    }
-  }
-
-  BindingCall(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-  }
-
-  String name() {
-    return initializer.get("name").getAsString();
-  }
-
-  void call(BindingCallback binding) {
-    try {
-      Frame frame = connection.getExistingObject(initializer.getAsJsonObject("frame").get("guid").getAsString());
-      BindingCallback.Source source = new SourceImpl(frame);
-      List<Object> args = new ArrayList<>();
-      if (initializer.has("handle")) {
-        JSHandle handle = connection.getExistingObject(initializer.getAsJsonObject("handle").get("guid").getAsString());
-        args.add(handle);
-      } else {
-        for (JsonElement arg : initializer.getAsJsonArray("args")) {
-          args.add(deserialize(gson().fromJson(arg, SerializedValue.class)));
+internal class BindingCall(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) :
+    ChannelOwner(parent, type, guid, initializer)
+{
+    private class SourceImpl(private val frame: Frame) : BindingCallback.Source
+    {
+        override fun context(): BrowserContext?
+        {
+            return page()!!.context()
         }
-      }
-      Object result = binding.call(source, args.toArray());
 
-      JsonObject params = new JsonObject();
-      params.add("result", gson().toJsonTree(serializeArgument(result)));
-      sendMessage("resolve", params);
-    } catch (RuntimeException exception) {
-      JsonObject params = new JsonObject();
-      params.add("error", gson().toJsonTree(serializeError(exception)));
-      sendMessage("reject", params);
+        override fun page(): Page?
+        {
+            return frame.page()
+        }
+
+        override fun frame(): Frame
+        {
+            return frame
+        }
     }
-  }
+
+    fun name(): String?
+    {
+        return initializer!!.get("name").asString
+    }
+
+    fun call(binding: BindingCallback)
+    {
+        try
+        {
+            val frame =
+                connection!!.getExistingObject<Frame?>(initializer!!.getAsJsonObject("frame").get("guid").asString)
+            val source: BindingCallback.Source = SourceImpl(frame!!)
+            val args: MutableList<Any?> = ArrayList()
+            if (initializer.has("handle"))
+            {
+                val handle = connection.getExistingObject<JSHandle?>(
+                    initializer.getAsJsonObject("handle").get("guid").asString
+                )
+                args.add(handle)
+            } else
+            {
+                for (arg in initializer.getAsJsonArray("args"))
+                {
+                    args.add(
+                        Serialization.deserialize<Any?>(
+                            Serialization.gson().fromJson(
+                                arg, SerializedValue::class.java
+                            )
+                        )
+                    )
+                }
+            }
+            val result = binding.call(source, *args.toTypedArray())
+
+            val params = JsonObject()
+            params.add("result", Serialization.gson().toJsonTree(Serialization.serializeArgument(result)))
+            sendMessage("resolve", params)
+        } catch (exception: RuntimeException)
+        {
+            val params = JsonObject()
+            params.add("error", Serialization.gson().toJsonTree(Serialization.serializeError(exception)))
+            sendMessage("reject", params)
+        }
+    }
 }
