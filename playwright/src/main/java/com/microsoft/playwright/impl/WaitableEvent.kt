@@ -13,51 +13,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import java.util.function.Consumer
+import java.util.function.Predicate
 
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+internal open class WaitableEvent<EventType, T> @JvmOverloads constructor(
+    val listeners: ListenerCollection<EventType?>,
+    private val type: EventType?,
+    private val predicate: Predicate<T?>? = null
+) : Waitable<T?>, Consumer<T?>
+{
+    private var eventArg: T? = null
 
-class WaitableEvent<EventType, T> implements Waitable<T>, Consumer<T> {
-  final ListenerCollection<EventType> listeners;
-  private final EventType type;
-  private final Predicate<T> predicate;
-  private T eventArg;
-
-  WaitableEvent(ListenerCollection<EventType> listeners, EventType type) {
-    this(listeners, type, null);
-  }
-
-  WaitableEvent(ListenerCollection<EventType> listeners, EventType type, Predicate<T> predicate) {
-    this.listeners = listeners;
-    this.type = type;
-    this.predicate = predicate;
-    listeners.add(type, this);
-  }
-
-  @Override
-  public void accept(T eventArg) {
-    if (predicate != null && !predicate.test(eventArg)) {
-      return;
+    init
+    {
+        listeners.add(type, this)
     }
 
-    this.eventArg = eventArg;
-    dispose();
-  }
+    override fun accept(eventArg: T?)
+    {
+        if (predicate != null && !predicate.test(eventArg))
+        {
+            return
+        }
 
-  @Override
-  public boolean isDone() {
-    return eventArg != null;
-  }
+        this.eventArg = eventArg
+        dispose()
+    }
 
-  @Override
-  public void dispose() {
-    listeners.remove(type, this);
-  }
+    override fun isDone(): Boolean
+    {
+        return eventArg != null
+    }
 
-  @Override
-  public T get() {
-    return eventArg;
-  }
+    override fun dispose()
+    {
+        listeners.remove(type, this)
+    }
+
+    override fun get(): T?
+    {
+        return eventArg
+    }
 }
