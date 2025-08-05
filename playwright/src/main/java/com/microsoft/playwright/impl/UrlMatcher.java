@@ -45,7 +45,8 @@ public class UrlMatcher {
       return new UrlMatcher((Pattern) object);
     }
     if (object instanceof Predicate) {
-      return new UrlMatcher((Predicate<String>) object);
+      UrlMatcher urlMatcher = new UrlMatcher((Predicate<String>) object);
+      return urlMatcher;
     }
     throw new PlaywrightException("Url must be String, Pattern or Predicate<String>, found: " + object.getClass().getTypeName());
   }
