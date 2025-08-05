@@ -18,6 +18,7 @@ package com.microsoft.playwright.impl
 import org.opentest4j.AssertionFailedError
 import org.opentest4j.ValueWrapper
 import java.lang.String
+import java.util.*
 import java.util.regex.Pattern
 import java.util.stream.Collectors
 import kotlin.Any
@@ -32,7 +33,7 @@ internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @Jv
         expression: kotlin.String, textValue: ExpectedTextValue, expected: Any?, message: kotlin.String, options: FrameExpectOptions?
     )
     {
-        expectImpl(expression, mutableListOf(textValue), expected, message, options)
+        expectImpl(expression, Arrays.asList<ExpectedTextValue?>(textValue), expected, message, options)
     }
 
     fun expectImpl(
@@ -71,7 +72,7 @@ internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @Jv
             var log = if (result.log == null) "" else String.join("\n", result.log)
             if (!log.isEmpty())
             {
-                log = "\nCall log:\n$log"
+                log = "\nCall log:\n" + log
             }
             if (expected == null)
             {
@@ -79,7 +80,7 @@ internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @Jv
             }
             val expectedValue: ValueWrapper = formatValue(expected)
             val actualValue: ValueWrapper = formatValue(actual)
-            message += ": " + expectedValue.stringRepresentation + "\nReceived: " + actualValue.getStringRepresentation() + "\n"
+            message += ": " + expectedValue.getStringRepresentation() + "\nReceived: " + actualValue.getStringRepresentation() + "\n"
             throw AssertionFailedError(message + log, expectedValue, actualValue)
         }
     }
@@ -93,7 +94,7 @@ internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @Jv
                 return ValueWrapper.create(value)
             }
             val values: MutableCollection<kotlin.String?> =
-                listOf(*value as Array<Any?>).stream().map { e: Any? -> e.toString() }
+                Arrays.asList<Any?>(*value as Array<Any?>).stream().map<kotlin.String?> { e: Any? -> e.toString() }
                     .collect(Collectors.toList())
             val stringRepresentation = "[" + String.join(", ", values) + "]"
             return ValueWrapper.create(value, stringRepresentation)
@@ -123,10 +124,10 @@ internal open class AssertionsBase(@JvmField val actualLocator: LocatorImpl, @Jv
                 val fromField = options.javaClass.getDeclaredField("ignoreCase")
                 val value = fromField.get(options)
                 return value as Boolean?
-            } catch (_: NoSuchFieldException)
+            } catch (e: NoSuchFieldException)
             {
                 return null
-            } catch (_: IllegalAccessException)
+            } catch (e: IllegalAccessException)
             {
                 return null
             }
