@@ -13,94 +13,94 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.Route
+import java.util.function.Consumer
+import java.util.stream.Collectors
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.Route;
+internal class Router
+{
+    private var routes: MutableList<RouteInfo?> = ArrayList<RouteInfo?>()
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.Consumer;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+    private class RouteInfo(val matcher: UrlMatcher, val handler: Consumer<Route?>, var times: Int?)
+    {
+        fun handle(route: RouteImpl?)
+        {
+            handler.accept(route)
+        }
 
-import static com.microsoft.playwright.impl.Utils.toJsRegexFlags;
-
-class Router {
-  private List<RouteInfo> routes = new ArrayList<>();
-
-  private static class RouteInfo {
-    final UrlMatcher matcher;
-    final Consumer<Route> handler;
-    Integer times;
-
-    RouteInfo(UrlMatcher matcher, Consumer<Route> handler, Integer times) {
-      this.matcher = matcher;
-      this.handler = handler;
-      this.times = times;
+        fun decrementRemainingCallCount(): Boolean
+        {
+            if (times == null)
+            {
+                return false
+            }
+            times = times!! - 1
+            return times!! <= 0
+        }
     }
 
-    void handle(RouteImpl route) {
-      handler.accept(route);
+    fun add(matcher: UrlMatcher, handler: Consumer<Route?>, times: Int?)
+    {
+        routes.add(0, RouteInfo(matcher, handler, times))
     }
 
-    boolean decrementRemainingCallCount() {
-      if (times == null) {
-        return false;
-      }
-      --times;
-      return times <= 0;
+    fun remove(matcher: UrlMatcher?, handler: Consumer<Route?>?)
+    {
+        routes = routes.stream()
+            .filter { info: RouteInfo? -> info!!.matcher != matcher || (handler != null && info.handler !== handler) }
+            .collect(Collectors.toList())
     }
-  }
 
-  void add(UrlMatcher matcher, Consumer<Route> handler, Integer times) {
-    routes.add(0, new RouteInfo(matcher, handler, times));
-  }
-
-  void remove(UrlMatcher matcher, Consumer<Route> handler) {
-    routes = routes.stream()
-      .filter(info -> !info.matcher.equals(matcher) || (handler != null && info.handler != handler))
-      .collect(Collectors.toList());
-  }
-
-  void removeAll() {
-    routes.clear();
-  }
-
-  enum HandleResult { NoMatchingHandler, Handled, Fallback, PendingHandler }
-  HandleResult handle(RouteImpl route) {
-    HandleResult result = HandleResult.NoMatchingHandler;
-    for (Iterator<RouteInfo> it = routes.iterator(); it.hasNext();) {
-      RouteInfo info = it.next();
-      if (!info.matcher.test(route.request().url())) {
-        continue;
-      }
-      if (info.decrementRemainingCallCount()) {
-        it.remove();
-      }
-      route.fallbackCalled = false;
-      info.handle(route);
-      if (route.isHandled()) {
-        return HandleResult.Handled;
-      }
-      // Not immediately handled and fallback() was not called => the route
-      // must be handled asynchronously.
-      if (!route.fallbackCalled) {
-        route.shouldResumeIfFallbackIsCalled = true;
-        return HandleResult.PendingHandler;
-      }
-      // Fallback was called, continue to the remaining handlers.
-      result = HandleResult.Fallback;
+    fun removeAll()
+    {
+        routes.clear()
     }
-    return result;
-  }
 
-  JsonObject interceptionPatterns() {
-    List<UrlMatcher> matchers = routes.stream().map(r -> r.matcher).collect(Collectors.toList());
-    return Utils.interceptionPatterns(matchers);
-  }
+    internal enum class HandleResult
+    {
+        NoMatchingHandler, Handled, Fallback, PendingHandler
+    }
+
+    fun handle(route: RouteImpl): HandleResult
+    {
+        var result = HandleResult.NoMatchingHandler
+        val it = routes.iterator()
+        while (it.hasNext())
+        {
+            val info = it.next()
+            if (!info?.matcher!!.test(route.request().url()))
+            {
+                continue
+            }
+            if (info.decrementRemainingCallCount())
+            {
+                it.remove()
+            }
+            route.fallbackCalled = false
+            info.handle(route)
+            if (route.isHandled())
+            {
+                return HandleResult.Handled
+            }
+            // Not immediately handled and fallback() was not called => the route
+            // must be handled asynchronously.
+            if (!route.fallbackCalled)
+            {
+                route.shouldResumeIfFallbackIsCalled = true
+                return HandleResult.PendingHandler
+            }
+            // Fallback was called, continue to the remaining handlers.
+            result = HandleResult.Fallback
+        }
+        return result
+    }
+
+    fun interceptionPatterns(): JsonObject
+    {
+        val matchers = routes.stream().map<UrlMatcher?> { r: RouteInfo? -> r!!.matcher }.collect(Collectors.toList())
+        return Utils.interceptionPatterns(matchers)
+    }
 }
