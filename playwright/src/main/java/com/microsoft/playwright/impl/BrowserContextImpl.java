@@ -73,16 +73,6 @@ class BrowserContextImpl extends ChannelOwner implements BrowserContext {
   URL baseUrl;
   final Map<String, HarRecorder> harRecorders = new HashMap<>();
 
-  static class HarRecorder {
-    final Path path;
-    final HarContentPolicy contentPolicy;
-
-    HarRecorder(Path har, HarContentPolicy policy) {
-      path = har;
-      contentPolicy = policy;
-    }
-  }
-
   enum EventType {
     BACKGROUNDPAGE,
     CLOSE,
