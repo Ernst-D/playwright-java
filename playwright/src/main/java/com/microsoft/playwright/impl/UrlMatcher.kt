@@ -13,155 +13,180 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.microsoft.playwright.PlaywrightException
+import java.net.URI
+import java.net.URISyntaxException
+import java.net.URL
+import java.util.function.Predicate
+import java.util.regex.Pattern
 
-import com.microsoft.playwright.PlaywrightException;
+class UrlMatcher private constructor(
+  baseURL: URL?, @JvmField val glob: String?, @JvmField val pattern: Pattern?, val predicate: Predicate<String?>?
+)
+{
+    private val baseURL: String?
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.Arrays;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
+    internal constructor(baseURL: URL?, glob: String?) : this(baseURL, glob, null, null)
 
-import static com.microsoft.playwright.impl.Utils.globToRegex;
-import static com.microsoft.playwright.impl.Utils.toJsRegexFlags;
+    internal constructor(pattern: Pattern?) : this(null, null, pattern, null)
 
-public class UrlMatcher {
-  private final String baseURL;
-  public final String glob;
-  public final Pattern pattern;
-  public final Predicate<String> predicate;
+    internal constructor(predicate: Predicate<String?>?) : this(null, null, null, predicate)
 
-  static UrlMatcher forOneOf(URL baseUrl, Object object) {
-    if (object == null) {
-      return new UrlMatcher(null, null, null, null);
+    init
+    {
+        this.baseURL = baseURL?.toString()
     }
-    if (object instanceof String) {
-      return new UrlMatcher(baseUrl, (String) object);
+
+    fun test(value: String?): Boolean
+    {
+        return testImpl(baseURL, pattern, predicate, glob, value)
     }
-    if (object instanceof Pattern) {
-      return new UrlMatcher((Pattern) object);
-    }
-    if (object instanceof Predicate) {
-      UrlMatcher urlMatcher = new UrlMatcher((Predicate<String>) object);
-      return urlMatcher;
-    }
-    throw new PlaywrightException("Url must be String, Pattern or Predicate<String>, found: " + object.getClass().getTypeName());
-  }
 
-  static String resolveUrl(URL baseUrl, String spec) {
-    return resolveUrl(baseUrl.toString(), spec);
-  }
-
-  private static String resolveUrl(String baseUrl, String spec) {
-    if (baseUrl == null) {
-      return spec;
-    }
-    try {
-      // Join using URI instead of URL since URL doesn't handle ws(s) protocols.
-      return new URI(baseUrl).resolve(spec).toString();
-    } catch (URISyntaxException e) {
-      return spec;
-    }
-  }
-
-  private static String normaliseUrl(String spec) {
-    try {
-      // Align with the Node.js URL parser which automatically adds a slash to the path if it is empty.
-      URI url = new URI(spec);
-      if (url.getScheme() != null &&
-        Arrays.asList("http", "https", "ws", "wss").contains(url.getScheme()) &&
-        url.getPath().isEmpty()) {
-        return new URI(url.getScheme(), url.getAuthority(), "/", url.getQuery(), url.getFragment()).toString();
-      }
-      return url.toString();
-    } catch (URISyntaxException e) {
-      return spec;
-    }
-  }
-
-  UrlMatcher(URL baseURL, String glob) {
-    this(baseURL, glob, null, null);
-  }
-
-  UrlMatcher(Pattern pattern) {
-    this(null, null, pattern, null);
-  }
-
-  UrlMatcher(Predicate<String> predicate) {
-    this(null, null, null, predicate);
-  }
-
-  private UrlMatcher(URL baseURL, String glob, Pattern pattern, Predicate<String> predicate) {
-    this.baseURL = baseURL != null ? baseURL.toString() : null;
-    this.glob = glob;
-    this.pattern = pattern;
-    this.predicate = predicate;
-  }
-
-  boolean test(String value) {
-    return testImpl(baseURL, pattern, predicate, glob, value);
-  }
-
-  private static boolean testImpl(String baseURL, Pattern pattern, Predicate<String> predicate, String glob, String value) {
-    if (pattern != null) {
-      return pattern.matcher(value).find();
-    }
-    if (predicate != null) {
-      return predicate.test(value);
-    }
-    if (glob != null) {
-      if (!glob.startsWith("*")) {
-        // Allow http(s) baseURL to match ws(s) urls.
-        if (baseURL != null && Pattern.compile("^https?://").matcher(baseURL).find() && Pattern.compile("^wss?://").matcher(value).find()) {
-          baseURL = baseURL.replaceFirst("^http", "ws");
+    override fun equals(other: Any?): Boolean
+    {
+        if (this === other) return true
+        if (other == null || javaClass != other.javaClass) return false
+        val that = other as UrlMatcher
+        if (pattern != null)
+        {
+            return that.pattern != null && pattern.pattern() == that.pattern.pattern() && pattern.flags() == that.pattern.flags()
         }
-        glob = normaliseUrl(resolveUrl(baseURL, glob));
-      }
-      return Pattern.compile(globToRegex(glob)).matcher(value).find();
+        if (predicate != null)
+        {
+            return predicate == that.predicate
+        }
+        if (glob != null)
+        {
+            return glob == that.glob
+        }
+        return that.pattern == null && that.predicate == null && that.glob == null
     }
-    return true;
-  }
 
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    UrlMatcher that = (UrlMatcher) o;
-    if (pattern != null) {
-      return that.pattern != null && pattern.pattern().equals(that.pattern.pattern()) && pattern.flags() == that.pattern.flags();
+    override fun hashCode(): Int
+    {
+        if (pattern != null)
+        {
+            return pattern.hashCode()
+        }
+        if (predicate != null)
+        {
+            return predicate.hashCode()
+        }
+        if (glob != null)
+        {
+            return glob.hashCode()
+        }
+        return 0
     }
-    if (predicate != null) {
-      return predicate.equals(that.predicate);
-    }
-    if (glob != null) {
-      return glob.equals(that.glob);
-    }
-    return that.pattern == null  && that.predicate == null && that.glob == null;
-  }
 
-  @Override
-  public int hashCode() {
-    if (pattern != null) {
-      return pattern.hashCode();
+    override fun toString(): String
+    {
+        if (pattern != null) return String.format(
+            "<regex pattern=\"%s\" flags=\"%s\">", pattern.pattern(), Utils.toJsRegexFlags(pattern)
+        )
+        if (this.predicate != null) return "<predicate>"
+        return String.format("<glob pattern=\"%s\">", glob)
     }
-    if (predicate != null) {
-      return predicate.hashCode();
-    }
-    if (glob != null) {
-      return glob.hashCode();
-    }
-    return 0;
-  }
 
-  @Override
-  public String toString() {
-    if (pattern != null)
-      return String.format("<regex pattern=\"%s\" flags=\"%s\">", pattern.pattern(), toJsRegexFlags(pattern));
-    if (this.predicate != null)
-      return "<predicate>";
-    return String.format("<glob pattern=\"%s\">", glob);
-  }
+    companion object
+    {
+        @JvmStatic
+        fun forOneOf(baseUrl: URL?, `object`: Any?): UrlMatcher
+        {
+            if (`object` == null)
+            {
+                return UrlMatcher(null, null, null, null)
+            }
+            if (`object` is String)
+            {
+                return UrlMatcher(baseUrl, `object`)
+            }
+            if (`object` is Pattern)
+            {
+                return UrlMatcher(`object`)
+            }
+            if (`object` is Predicate<*>)
+            {
+                val urlMatcher = UrlMatcher(`object` as Predicate<String?>)
+                return urlMatcher
+            }
+            throw PlaywrightException("Url must be String, Pattern or Predicate<String>, found: " + `object`.javaClass.getTypeName())
+        }
+
+        @JvmStatic
+        fun resolveUrl(baseUrl: URL, spec: String): String?
+        {
+            return resolveUrl(baseUrl.toString(), spec)
+        }
+
+        private fun resolveUrl(baseUrl: String?, spec: String): String?
+        {
+            if (baseUrl == null)
+            {
+                return spec
+            }
+            try
+            {
+                // Join using URI instead of URL since URL doesn't handle ws(s) protocols.
+                return URI(baseUrl).resolve(spec).toString()
+            } catch (e: URISyntaxException)
+            {
+                return spec
+            }
+        }
+
+        private fun normaliseUrl(spec: String): String?
+        {
+            try
+            {
+                // Align with the Node.js URL parser which automatically adds a slash to the path if it is empty.
+                val url = URI(spec)
+                if (url.getScheme() != null && mutableListOf<String?>(
+                        "http", "https", "ws", "wss"
+                    ).contains(url.getScheme()) && url.getPath().isEmpty()
+                )
+                {
+                    return URI(url.getScheme(), url.getAuthority(), "/", url.getQuery(), url.getFragment()).toString()
+                }
+                return url.toString()
+            } catch (e: URISyntaxException)
+            {
+                return spec
+            }
+        }
+
+        private fun testImpl(
+            baseURL: String?, pattern: Pattern?, predicate: Predicate<String?>?, glob: String?, value: String?
+        ): Boolean
+        {
+            var baseURL = baseURL
+            var glob = glob
+            if (pattern != null)
+            {
+                return pattern.matcher(value).find()
+            }
+            if (predicate != null)
+            {
+                return predicate.test(value)
+            }
+            if (glob != null)
+            {
+                if (!glob.startsWith("*"))
+                {
+                    // Allow http(s) baseURL to match ws(s) urls.
+                    if (baseURL != null && Pattern.compile("^https?://").matcher(baseURL)
+                            .find() && Pattern.compile("^wss?://").matcher(value).find()
+                    )
+                    {
+                        baseURL = baseURL.replaceFirst("^http".toRegex(), "ws")
+                    }
+                    glob = Companion.normaliseUrl(resolveUrl(baseURL, glob)!!)
+                }
+                return Pattern.compile(Utils.globToRegex(glob)).matcher(value).find()
+            }
+            return true
+        }
+    }
 }

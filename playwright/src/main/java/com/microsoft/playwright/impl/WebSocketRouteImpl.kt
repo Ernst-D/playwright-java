@@ -125,7 +125,7 @@ internal class WebSocketRouteImpl(parent: ChannelOwner?, type: String?, guid: St
 
     override fun url(): String?
     {
-        return initializer!!.get("url").asString
+        return initializer?.get("url")?.asString
     }
 
     fun afterHandle()

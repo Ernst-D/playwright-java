@@ -11,10 +11,10 @@ internal class WebSocketRouter
 
     private class RouteInfo(val matcher: UrlMatcher, private val handler: Consumer<WebSocketRoute?>)
     {
-        fun handle(route: WebSocketRouteImpl)
+        fun handle(route: WebSocketRouteImpl?)
         {
             handler.accept(route)
-            route.afterHandle()
+            route?.afterHandle()
         }
     }
 
@@ -23,11 +23,11 @@ internal class WebSocketRouter
         routes.add(0, RouteInfo(matcher, handler))
     }
 
-    fun handle(route: WebSocketRouteImpl): Boolean
+    fun handle(route: WebSocketRouteImpl?): Boolean
     {
         for (routeInfo in routes)
         {
-            if (routeInfo.matcher.test(route.url()))
+            if (routeInfo.matcher.test(route?.url()))
             {
                 routeInfo.handle(route)
                 return true
