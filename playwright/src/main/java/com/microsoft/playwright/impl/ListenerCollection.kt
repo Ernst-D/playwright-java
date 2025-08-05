@@ -13,79 +13,83 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.PlaywrightException
+import java.util.function.Consumer
 
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.PlaywrightException;
+internal class ListenerCollection<EventType> @JvmOverloads constructor(
+    private val eventSubscriptions: MutableMap<EventType?, String?>? = null,
+    private val channelOwner: ChannelOwner? = null
+)
+{
+    private val listeners = HashMap<EventType?, MutableList<Consumer<*>>?>()
 
-import java.util.*;
-import java.util.function.Consumer;
+    fun <T> notify(eventType: EventType?, param: T?)
+    {
+        val list = listeners.get(eventType)
+        if (list == null)
+        {
+            return
+        }
 
-class ListenerCollection <EventType> {
-  private final HashMap<EventType, List<Consumer<?>>> listeners = new HashMap<>();
-  private final Map<EventType, String> eventSubscriptions;
-  private final ChannelOwner channelOwner;
-
-  ListenerCollection() {
-    this(null, null);
-  }
-  ListenerCollection(Map<EventType, String> eventSubscriptions, ChannelOwner channelOwner) {
-    this.eventSubscriptions = eventSubscriptions;
-    this.channelOwner = channelOwner;
-  }
-
-  <T> void notify(EventType eventType, T param) {
-    List<Consumer<?>> list = listeners.get(eventType);
-    if (list == null) {
-      return;
+        for (listener in ArrayList<Consumer<*>>(list))
+        {
+            (listener as Consumer<T?>).accept(param)
+        }
     }
 
-    for (Consumer<?> listener: new ArrayList<>(list)) {
-      ((Consumer<T>) listener).accept(param);
+    fun add(type: EventType?, listener: Consumer<*>?)
+    {
+        if (listener == null)
+        {
+            throw PlaywrightException("Can't add a null listener")
+        }
+        var list = listeners.get(type)
+        if (list == null)
+        {
+            list = ArrayList()
+            listeners.put(type, list)
+            updateSubscription(type, true)
+        }
+        list.add(listener)
     }
-  }
 
-  void add(EventType type, Consumer<?> listener) {
-    if (listener == null) {
-      throw new PlaywrightException("Can't add a null listener");
+    fun remove(type: EventType?, listener: Consumer<*>?)
+    {
+        val list = listeners.get(type)
+        if (list == null)
+        {
+            return
+        }
+        list.removeAll(mutableSetOf(listener))
+        if (list.isEmpty())
+        {
+            updateSubscription(type, false)
+            listeners.remove(type)
+        }
     }
-    List<Consumer<?>> list = listeners.get(type);
-    if (list == null) {
-      list = new ArrayList<>();
-      listeners.put(type, list);
-      updateSubscription(type, true);
-    }
-    list.add(listener);
-  }
 
-  void remove(EventType type, Consumer<?>  listener) {
-    List<Consumer<?>> list = listeners.get(type);
-    if (list == null) {
-      return;
+    fun hasListeners(type: EventType?): Boolean
+    {
+        return listeners.containsKey(type)
     }
-    list.removeAll(Collections.singleton(listener));
-    if (list.isEmpty()) {
-      updateSubscription(type, false);
-      listeners.remove(type);
-    }
-  }
 
-  boolean hasListeners(EventType type) {
-    return listeners.containsKey(type);
-  }
-
-  private void updateSubscription(EventType eventType, boolean enabled) {
-    if (eventSubscriptions == null) {
-      return;
+    private fun updateSubscription(eventType: EventType?, enabled: Boolean)
+    {
+        if (eventSubscriptions == null)
+        {
+            return
+        }
+        val protocolEvent = eventSubscriptions.get(eventType)
+        if (protocolEvent == null)
+        {
+            return
+        }
+        val params = JsonObject()
+        params.addProperty("event", protocolEvent)
+        params.addProperty("enabled", enabled)
+        channelOwner?.sendMessageAsync("updateSubscription", params)
     }
-    String protocolEvent = eventSubscriptions.get(eventType);
-    if (protocolEvent == null) {
-      return;
-    }
-    JsonObject params = new JsonObject();
-    params.addProperty("event", protocolEvent);
-    params.addProperty("enabled", enabled);
-    channelOwner.sendMessageAsync("updateSubscription", params);
-  }
 }

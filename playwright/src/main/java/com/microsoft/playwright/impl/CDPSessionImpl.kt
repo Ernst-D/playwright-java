@@ -23,7 +23,7 @@ internal class CDPSessionImpl(
     parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?
 ) : ChannelOwner(parent, type, guid, initializer), CDPSession
 {
-    private val listeners = ListenerCollection<String?>(HashMap<String?, String?>(), this)
+    private val listeners = ListenerCollection<String?>(HashMap(), this)
 
     // used to be protected, set later
     override fun handleEvent(event: String?, parameters: JsonObject?)
@@ -59,7 +59,7 @@ internal class CDPSessionImpl(
         else return response.asJsonObject.get("result").asJsonObject
     }
 
-    override fun on(event: String?, handler: Consumer<JsonObject?>?)
+    override fun on(event: String?, handler: Consumer<JsonObject?>)
     {
         listeners.add(event, handler)
     }
