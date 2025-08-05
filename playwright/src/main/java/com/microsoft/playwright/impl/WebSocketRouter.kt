@@ -1,47 +1,44 @@
-package com.microsoft.playwright.impl;
+package com.microsoft.playwright.impl
 
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.WebSocketRoute;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.WebSocketRoute
+import java.util.function.Consumer
+import java.util.stream.Collectors
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+internal class WebSocketRouter
+{
+    private val routes: MutableList<RouteInfo> = ArrayList<RouteInfo>()
 
-public class WebSocketRouter {
-    private List<RouteInfo> routes = new ArrayList<>();
-
-  private static class RouteInfo {
-    final UrlMatcher matcher;
-    private final Consumer<WebSocketRoute> handler;
-
-    RouteInfo(UrlMatcher matcher, Consumer<WebSocketRoute> handler) {
-      this.matcher = matcher;
-      this.handler = handler;
+    private class RouteInfo(val matcher: UrlMatcher, private val handler: Consumer<WebSocketRoute?>)
+    {
+        fun handle(route: WebSocketRouteImpl)
+        {
+            handler.accept(route)
+            route.afterHandle()
+        }
     }
 
-    void handle(WebSocketRouteImpl route) {
-      handler.accept(route);
-      route.afterHandle();
+    fun add(matcher: UrlMatcher, handler: Consumer<WebSocketRoute?>)
+    {
+        routes.add(0, RouteInfo(matcher, handler))
     }
-  }
 
-  void add(UrlMatcher matcher, Consumer<WebSocketRoute> handler) {
-    routes.add(0, new RouteInfo(matcher, handler));
-  }
-
-  boolean handle(WebSocketRouteImpl route) {
-    for (RouteInfo routeInfo: routes) {
-      if (routeInfo.matcher.test(route.url())) {
-        routeInfo.handle(route);
-        return true;
-      }
+    fun handle(route: WebSocketRouteImpl): Boolean
+    {
+        for (routeInfo in routes)
+        {
+            if (routeInfo.matcher.test(route.url()))
+            {
+                routeInfo.handle(route)
+                return true
+            }
+        }
+        return false
     }
-    return false;
-  }
 
-  JsonObject interceptionPatterns() {
-    List<UrlMatcher> matchers = routes.stream().map(r -> r.matcher).collect(Collectors.toList());
-    return Utils.interceptionPatterns(matchers);
-  }
+    fun interceptionPatterns(): JsonObject
+    {
+        val matchers = routes.stream().map<UrlMatcher?> { r: RouteInfo? -> r!!.matcher }.collect(Collectors.toList())
+        return Utils.interceptionPatterns(matchers)
+    }
 }

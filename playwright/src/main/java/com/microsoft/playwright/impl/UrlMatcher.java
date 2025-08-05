@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 import static com.microsoft.playwright.impl.Utils.globToRegex;
 import static com.microsoft.playwright.impl.Utils.toJsRegexFlags;
 
-class UrlMatcher {
+public class UrlMatcher {
   private final String baseURL;
   public final String glob;
   public final Pattern pattern;
