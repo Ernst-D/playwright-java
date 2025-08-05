@@ -1,188 +1,206 @@
-package com.microsoft.playwright.impl;
+package com.microsoft.playwright.impl
 
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.PlaywrightException;
-import com.microsoft.playwright.WebSocketFrame;
-import com.microsoft.playwright.WebSocketRoute;
+import com.google.gson.JsonObject
+import com.microsoft.playwright.PlaywrightException
+import com.microsoft.playwright.WebSocketFrame
+import com.microsoft.playwright.WebSocketRoute
+import java.util.*
+import java.util.function.BiConsumer
+import java.util.function.Consumer
 
-import java.util.Base64;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+internal class WebSocketRouteImpl(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) :
+    ChannelOwner(parent, type, guid, initializer), WebSocketRoute
+{
+    private var onPageMessage: Consumer<WebSocketFrame?>? = null
+    private var onPageClose: BiConsumer<Int?, String?>? = null
+    private var onServerMessage: Consumer<WebSocketFrame?>? = null
+    private var onServerClose: BiConsumer<Int?, String?>? = null
+    private var connected = false
+    private val server: WebSocketRoute = object : WebSocketRoute
+    {
+        override fun close(options: WebSocketRoute.CloseOptions?)
+        {
+            var options = options
+            if (options == null)
+            {
+                options = WebSocketRoute.CloseOptions()
+            }
+            val params = Serialization.gson().toJsonTree(options).asJsonObject
+            params.addProperty("wasClean", true)
+            sendMessageAsync("closeServer", params)
+        }
 
-import static com.microsoft.playwright.impl.Serialization.gson;
+        override fun connectToServer(): WebSocketRoute?
+        {
+            throw PlaywrightException("connectToServer must be called on the page-side WebSocketRoute")
+        }
 
-class WebSocketRouteImpl extends ChannelOwner implements WebSocketRoute {
+        override fun onClose(handler: BiConsumer<Int?, String?>?)
+        {
+            onServerClose = handler
+        }
 
-  private Consumer<WebSocketFrame> onPageMessage;
-  private BiConsumer<Integer, String> onPageClose;
-  private Consumer<WebSocketFrame> onServerMessage;
-  private BiConsumer<Integer, String> onServerClose;
-  private boolean connected;
-  private WebSocketRoute server = new WebSocketRoute() {
-    @Override
-    public void close(CloseOptions options) {
-      if (options == null) {
-        options = new CloseOptions();
-      }
-      JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-      params.addProperty("wasClean", true);
-      sendMessageAsync("closeServer", params);
+        override fun onMessage(handler: Consumer<WebSocketFrame?>?)
+        {
+            onServerMessage = handler
+        }
+
+        override fun send(message: String?)
+        {
+            val params = JsonObject()
+            params.addProperty("message", message)
+            params.addProperty("isBase64", false)
+            sendMessageAsync("sendToServer", params)
+        }
+
+        override fun send(message: ByteArray?)
+        {
+            val params = JsonObject()
+            val base64 = Base64.getEncoder().encodeToString(message)
+            params.addProperty("message", base64)
+            params.addProperty("isBase64", true)
+            sendMessageAsync("sendToServer", params)
+        }
+
+        override fun url(): String?
+        {
+            return initializer!!.get("url").asString
+        }
     }
 
-    @Override
-    public WebSocketRoute connectToServer() {
-      throw new PlaywrightException("connectToServer must be called on the page-side WebSocketRoute");
+    init
+    {
+        markAsInternalType()
     }
 
-    @Override
-    public void onClose(BiConsumer<Integer, String> handler) {
-      onServerClose = handler;
+    override fun close(options: WebSocketRoute.CloseOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = WebSocketRoute.CloseOptions()
+        }
+        val params = Serialization.gson().toJsonTree(options).asJsonObject
+        params.addProperty("wasClean", true)
+        sendMessageAsync("closePage", params)
     }
 
-    @Override
-    public void onMessage(Consumer<WebSocketFrame> handler) {
-      onServerMessage = handler;
+    override fun connectToServer(): WebSocketRoute
+    {
+        if (connected)
+        {
+            throw PlaywrightException("Already connected to the server")
+        }
+        connected = true
+        sendMessageAsync("connect")
+        return server
     }
 
-    @Override
-    public void send(String message) {
-      JsonObject params = new JsonObject();
-      params.addProperty("message", message);
-      params.addProperty("isBase64", false);
-      sendMessageAsync("sendToServer", params);
+    override fun onClose(handler: BiConsumer<Int?, String?>?)
+    {
+        onPageClose = handler
     }
 
-    @Override
-    public void send(byte[] message) {
-      JsonObject params = new JsonObject();
-      String base64 = Base64.getEncoder().encodeToString(message);
-      params.addProperty("message", base64);
-      params.addProperty("isBase64", true);
-      sendMessageAsync("sendToServer", params);
+    override fun onMessage(handler: Consumer<WebSocketFrame?>?)
+    {
+        onPageMessage = handler
     }
 
-    @Override
-    public String url() {
-      return initializer.get("url").getAsString();
+    override fun send(message: String?)
+    {
+        val params = JsonObject()
+        params.addProperty("message", message)
+        params.addProperty("isBase64", false)
+        sendMessageAsync("sendToPage", params)
     }
-  };
 
-  WebSocketRouteImpl(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-    markAsInternalType();
-  }
-
-    @Override
-  public void close(CloseOptions options) {
-      if (options == null) {
-        options = new CloseOptions();
-      }
-      JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-      params.addProperty("wasClean", true);
-      sendMessageAsync("closePage", params);
-  }
-
-  @Override
-  public WebSocketRoute connectToServer() {
-    if (connected) {
-      throw new PlaywrightException("Already connected to the server");
+    override fun send(message: ByteArray?)
+    {
+        val params = JsonObject()
+        val base64 = Base64.getEncoder().encodeToString(message)
+        params.addProperty("message", base64)
+        params.addProperty("isBase64", true)
+        sendMessageAsync("sendToPage", params)
     }
-    connected = true;
-    sendMessageAsync("connect");
-    return server;
-  }
 
-  @Override
-  public void onClose(BiConsumer<Integer, String> handler) {
-    onPageClose = handler;
-  }
-
-  @Override
-  public void onMessage(Consumer<WebSocketFrame> handler) {
-    onPageMessage = handler;
-  }
-
-  @Override
-  public void send(String message) {
-    JsonObject params = new JsonObject();
-    params.addProperty("message", message);
-    params.addProperty("isBase64", false);
-    sendMessageAsync("sendToPage", params);
-  }
-
-  @Override
-  public void send(byte[] message) {
-    JsonObject params = new JsonObject();
-    String base64 = Base64.getEncoder().encodeToString(message);
-    params.addProperty("message", base64);
-    params.addProperty("isBase64", true);
-    sendMessageAsync("sendToPage", params);
-  }
-
-  @Override
-  public String url() {
-    return initializer.get("url").getAsString();
-  }
-
-  void afterHandle() {
-    if (this.connected) {
-      return;
+    override fun url(): String?
+    {
+        return initializer!!.get("url").asString
     }
-    // Ensure that websocket is "open" and can send messages without an actual server connection.
-    sendMessageAsync("ensureOpened");
-  }
 
-  // used to protected
-  @Override
-  public void handleEvent(String event, JsonObject params) {
-    if ("messageFromPage".equals(event)) {
-      String message = params.get("message").getAsString();
-      boolean isBase64 = params.get("isBase64").getAsBoolean();
-      if (onPageMessage != null) {
-        onPageMessage.accept(new WebSocketFrameImpl(message, isBase64));
-      } else if (connected) {
-        JsonObject messageParams = new JsonObject();
-        messageParams.addProperty("message", message);
-        messageParams.addProperty("isBase64", isBase64);
-        sendMessageAsync("sendToServer", messageParams);
-      }
-    } else if ("messageFromServer".equals(event)) {
-      String message = params.get("message").getAsString();
-      boolean isBase64 = params.get("isBase64").getAsBoolean();
-      if (onServerMessage != null) {
-        onServerMessage.accept(new WebSocketFrameImpl(message, isBase64));
-      } else {
-        JsonObject messageParams = new JsonObject();
-        messageParams.addProperty("message", message);
-        messageParams.addProperty("isBase64", isBase64);
-        sendMessageAsync("sendToPage", messageParams);
-      }
-    } else if ("closePage".equals(event)) {
-      int code = params.get("code").getAsInt();
-      String reason = params.get("reason").getAsString();
-      boolean wasClean = params.get("wasClean").getAsBoolean();
-      if (onPageClose != null) {
-        onPageClose.accept(code, reason);
-      } else {
-        JsonObject closeParams = new JsonObject();
-        closeParams.addProperty("code", code);
-        closeParams.addProperty("reason", reason);
-        closeParams.addProperty("wasClean", wasClean);
-        sendMessageAsync("closeServer", closeParams);
-      }
-    } else if ("closeServer".equals(event)) {
-      int code = params.get("code").getAsInt();
-      String reason = params.get("reason").getAsString();
-      boolean wasClean = params.get("wasClean").getAsBoolean();
-      if (onServerClose != null) {
-        onServerClose.accept(code, reason);
-      } else {
-        JsonObject closeParams = new JsonObject();
-        closeParams.addProperty("code", code);
-        closeParams.addProperty("reason", reason);
-        closeParams.addProperty("wasClean", wasClean);
-        sendMessageAsync("closePage", closeParams);
-      }
+    fun afterHandle()
+    {
+        if (this.connected)
+        {
+            return
+        }
+        // Ensure that websocket is "open" and can send messages without an actual server connection.
+        sendMessageAsync("ensureOpened")
     }
-  }
+
+    // used to protected
+    override fun handleEvent(event: String?, parameters: JsonObject?)
+    {
+        if ("messageFromPage" == event)
+        {
+            val message = parameters?.get("message")?.asString
+            val isBase64 = parameters?.get("isBase64")?.asBoolean
+            if (onPageMessage != null)
+            {
+                onPageMessage!!.accept(WebSocketFrameImpl(message, isBase64 == true))
+            } else if (connected)
+            {
+                val messageParams = JsonObject()
+                messageParams.addProperty("message", message)
+                messageParams.addProperty("isBase64", isBase64)
+                sendMessageAsync("sendToServer", messageParams)
+            }
+        } else if ("messageFromServer" == event)
+        {
+            val message = parameters?.get("message")?.asString
+            val isBase64 = parameters?.get("isBase64")?.asBoolean
+            if (onServerMessage != null)
+            {
+                onServerMessage!!.accept(WebSocketFrameImpl(message, isBase64 == true))
+            } else
+            {
+                val messageParams = JsonObject()
+                messageParams.addProperty("message", message)
+                messageParams.addProperty("isBase64", isBase64)
+                sendMessageAsync("sendToPage", messageParams)
+            }
+        } else if ("closePage" == event)
+        {
+            val code = parameters?.get("code")?.asInt
+            val reason = parameters?.get("reason")?.asString
+            val wasClean = parameters?.get("wasClean")?.asBoolean
+            if (onPageClose != null)
+            {
+                onPageClose!!.accept(code, reason)
+            } else
+            {
+                val closeParams = JsonObject()
+                closeParams.addProperty("code", code)
+                closeParams.addProperty("reason", reason)
+                closeParams.addProperty("wasClean", wasClean)
+                sendMessageAsync("closeServer", closeParams)
+            }
+        } else if ("closeServer" == event)
+        {
+            val code = parameters?.get("code")?.asInt
+            val reason = parameters?.get("reason")?.asString
+            val wasClean = parameters?.get("wasClean")?.asBoolean
+            if (onServerClose != null)
+            {
+                onServerClose!!.accept(code, reason)
+            } else
+            {
+                val closeParams = JsonObject()
+                closeParams.addProperty("code", code)
+                closeParams.addProperty("reason", reason)
+                closeParams.addProperty("wasClean", wasClean)
+                sendMessageAsync("closePage", closeParams)
+            }
+        }
+    }
 }
