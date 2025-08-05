@@ -13,303 +13,366 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.microsoft.playwright.*
+import com.microsoft.playwright.Browser.NewPageOptions
+import com.microsoft.playwright.Browser.StartTracingOptions
+import com.microsoft.playwright.BrowserType.LaunchOptions
+import com.microsoft.playwright.options.HarContentPolicy
+import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.*
+import java.util.function.Consumer
+import java.util.function.Supplier
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.HarContentPolicy;
+internal class BrowserImpl(parent: ChannelOwner?, type: String?, guid: String?, initializer: JsonObject?) :
+    ChannelOwner(parent, type, guid, initializer), Browser
+{
+    @JvmField
+    val contexts: MutableSet<BrowserContextImpl> = HashSet<BrowserContextImpl>()
+    private val listeners = ListenerCollection<EventType?>()
+    @JvmField
+    var isConnectedOverWebSocket: Boolean = false
+    private var isConnected = true
+    @JvmField
+    var browserType: BrowserTypeImpl? = null
+    @JvmField
+    var launchOptions: LaunchOptions? = null
+    private var tracePath: Path? = null
+    @JvmField
+    var closeReason: String? = null
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.function.Consumer;
-
-import static com.microsoft.playwright.impl.Serialization.addHarUrlFilter;
-import static com.microsoft.playwright.impl.Serialization.gson;
-import static com.microsoft.playwright.impl.Utils.*;
-import static com.microsoft.playwright.impl.Utils.convertType;
-
-class BrowserImpl extends ChannelOwner implements Browser {
-  final Set<BrowserContextImpl> contexts = new HashSet<>();
-  private final ListenerCollection<EventType> listeners = new ListenerCollection<>();
-  boolean isConnectedOverWebSocket;
-  private boolean isConnected = true;
-  BrowserTypeImpl browserType;
-  BrowserType.LaunchOptions launchOptions;
-  private Path tracePath;
-  String closeReason;
-
-  enum EventType {
-    DISCONNECTED,
-  }
-
-  BrowserImpl(ChannelOwner parent, String type, String guid, JsonObject initializer) {
-    super(parent, type, guid, initializer);
-  }
-
-  @Override
-  public void onDisconnected(Consumer<Browser> handler) {
-    listeners.add(EventType.DISCONNECTED, handler);
-  }
-
-  @Override
-  public void offDisconnected(Consumer<Browser> handler) {
-    listeners.remove(EventType.DISCONNECTED, handler);
-  }
-
-  @Override
-  public BrowserType browserType() {
-    return browserType;
-  }
-
-  @Override
-  public void close(CloseOptions options) {
-    withLogging("Browser.close", () -> closeImpl(options));
-  }
-
-  private void closeImpl(CloseOptions options) {
-    if (options == null) {
-      options = new CloseOptions();
-    }
-    closeReason = options.reason;
-    if (isConnectedOverWebSocket) {
-      try {
-        connection.close();
-      } catch (IOException e) {
-        throw new PlaywrightException("Failed to close browser connection", e);
-      }
-      return;
-    }
-    try {
-      sendMessage("close");
-    } catch (PlaywrightException e) {
-      if (!isSafeCloseError(e)) {
-        throw e;
-      }
-    }
-  }
-
-  void notifyRemoteClosed() {
-    // Emulate all pages, contexts and the browser closing upon disconnect.
-    for (BrowserContextImpl context : new ArrayList<>(contexts)) {
-      for (PageImpl page : new ArrayList<>(context.pages)) {
-        page.didClose();
-      }
-      context.didClose();
-    }
-    didClose();
-  }
-
-  @Override
-  public List<BrowserContext> contexts() {
-    return new ArrayList<>(contexts);
-  }
-
-  @Override
-  public boolean isConnected() {
-    return isConnected;
-  }
-
-  @Override
-  public BrowserContextImpl newContext(NewContextOptions options) {
-    return withLogging("Browser.newContext", () -> newContextImpl(options));
-  }
-
-  private BrowserContextImpl newContextImpl(NewContextOptions options) {
-    if (options == null) {
-      options = new NewContextOptions();
-    } else {
-      // Make a copy so that we can nullify some fields below.
-      options = convertType(options, NewContextOptions.class);
-    }
-    if (options.storageStatePath != null) {
-      try {
-        byte[] bytes = Files.readAllBytes(options.storageStatePath);
-        options.storageState = new String(bytes, StandardCharsets.UTF_8);
-        options.storageStatePath = null;
-      } catch (IOException e) {
-        throw new PlaywrightException("Failed to read storage state from file", e);
-      }
-    }
-    JsonObject storageState = null;
-    if (options.storageState != null) {
-      storageState = new Gson().fromJson(options.storageState, JsonObject.class);
-      options.storageState = null;
-    }
-    JsonObject recordHar = null;
-    Path recordHarPath = options.recordHarPath;
-    HarContentPolicy harContentPolicy = null;
-    if (options.recordHarPath != null) {
-      recordHar = new JsonObject();
-      recordHar.addProperty("path", options.recordHarPath.toString());
-      if (options.recordHarContent != null) {
-        harContentPolicy = options.recordHarContent;
-      } else if (options.recordHarOmitContent != null && options.recordHarOmitContent) {
-        harContentPolicy = HarContentPolicy.OMIT;
-      }
-      if (harContentPolicy != null) {
-        recordHar.addProperty("content", harContentPolicy.name().toLowerCase());
-      }
-      if (options.recordHarMode != null) {
-        recordHar.addProperty("mode", options.recordHarMode.name().toLowerCase());
-      }
-      addHarUrlFilter(recordHar, options.recordHarUrlFilter);
-      options.recordHarPath = null;
-      options.recordHarMode = null;
-      options.recordHarOmitContent = null;
-      options.recordHarContent = null;
-      options.recordHarUrlFilter = null;
-    } else {
-      if (options.recordHarOmitContent != null) {
-        throw new PlaywrightException("recordHarOmitContent is set but recordHarPath is null");
-      }
-      if (options.recordHarUrlFilter != null) {
-        throw new PlaywrightException("recordHarUrlFilter is set but recordHarPath is null");
-      }
-      if (options.recordHarMode != null) {
-        throw new PlaywrightException("recordHarMode is set but recordHarPath is null");
-      }
-      if (options.recordHarContent != null) {
-        throw new PlaywrightException("recordHarContent is set but recordHarPath is null");
-      }
+    internal enum class EventType
+    {
+        DISCONNECTED,
     }
 
-    JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-    if (storageState != null) {
-      params.add("storageState", storageState);
+    override fun onDisconnected(handler: Consumer<Browser?>?)
+    {
+        listeners.add(EventType.DISCONNECTED, handler)
     }
-    if (recordHar != null) {
-      params.add("recordHar", recordHar);
+
+    override fun offDisconnected(handler: Consumer<Browser?>?)
+    {
+        listeners.remove(EventType.DISCONNECTED, handler)
     }
-    if (options.recordVideoDir != null) {
-      JsonObject recordVideo = new JsonObject();
-      recordVideo.addProperty("dir", options.recordVideoDir.toAbsolutePath().toString());
-      if (options.recordVideoSize != null) {
-        recordVideo.add("size", gson().toJsonTree(options.recordVideoSize));
-      }
-      params.remove("recordVideoDir");
-      params.remove("recordVideoSize");
-      params.add("recordVideo", recordVideo);
-    } else if (options.recordVideoSize != null) {
-      throw new PlaywrightException("recordVideoSize is set but recordVideoDir is null");
+
+    override fun browserType(): BrowserType?
+    {
+        return browserType
     }
-    if (options.viewportSize != null) {
-      if (options.viewportSize.isPresent()) {
-        JsonElement size = params.get("viewportSize");
-        params.remove("viewportSize");
-        params.add("viewport", size);
-      } else {
-        params.remove("viewportSize");
-        params.addProperty("noDefaultViewport", true);
-      }
+
+    override fun close(options: Browser.CloseOptions?)
+    {
+        withLogging("Browser.close", Runnable { closeImpl(options) })
     }
-    addToProtocol(params, options.clientCertificates);
-    params.remove("acceptDownloads");
-    if (options.acceptDownloads != null) {
-      params.addProperty("acceptDownloads", options.acceptDownloads ? "accept" : "deny");
+
+    private fun closeImpl(options: Browser.CloseOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = Browser.CloseOptions()
+        }
+        closeReason = options.reason
+        if (isConnectedOverWebSocket)
+        {
+            try
+            {
+                connection!!.close()
+            } catch (e: IOException)
+            {
+                throw PlaywrightException("Failed to close browser connection", e)
+            }
+            return
+        }
+        try
+        {
+            sendMessage("close")
+        } catch (e: PlaywrightException)
+        {
+            if (!Utils.isSafeCloseError(e))
+            {
+                throw e
+            }
+        }
     }
-    JsonElement result = sendMessage("newContext", params);
-    BrowserContextImpl context = connection.getExistingObject(result.getAsJsonObject().getAsJsonObject("context").get("guid").getAsString());
-    context.videosDir = options.recordVideoDir;
-    if (options.baseURL != null) {
-      context.setBaseUrl(options.baseURL);
+
+    fun notifyRemoteClosed()
+    {
+        // Emulate all pages, contexts and the browser closing upon disconnect.
+        for (context in ArrayList<BrowserContextImpl>(contexts))
+        {
+            for (page in ArrayList<PageImpl>(context.pages))
+            {
+                page.didClose()
+            }
+            context.didClose()
+        }
+        didClose()
     }
-    context.setRecordHar(recordHarPath, harContentPolicy);
-    if (launchOptions != null) {
-      context.tracing().setTracesDir(launchOptions.tracesDir);
+
+    override fun contexts(): MutableList<BrowserContext?>
+    {
+        return ArrayList<BrowserContext?>(contexts)
     }
-    contexts.add(context);
-    return context;
-  }
 
-  @Override
-  public Page newPage(NewPageOptions options) {
-    return withLogging("Browser.newPage", () -> newPageImpl(options));
-  }
-
-  @Override
-  public void startTracing(Page page, StartTracingOptions options) {
-    withLogging("Browser.startTracing", () -> startTracingImpl(page, options));
-  }
-
-  private void startTracingImpl(Page page, StartTracingOptions options) {
-    if (options == null) {
-      options = new StartTracingOptions();
+    override fun isConnected(): Boolean
+    {
+        return isConnected
     }
-    tracePath = options.path;
-    JsonObject params = gson().toJsonTree(options).getAsJsonObject();
-    if (page != null) {
-      params.add("page", ((PageImpl) page).toProtocolRef());
+
+    override fun newContext(options: Browser.NewContextOptions?): BrowserContextImpl?
+    {
+        return withLogging<BrowserContextImpl?>("Browser.newContext", Supplier { newContextImpl(options) })
     }
-    sendMessage("startTracing", params);
-  }
 
-  @Override
-  public byte[] stopTracing() {
-    return withLogging("Browser.stopTracing", () -> stopTracingImpl());
-  }
+    private fun newContextImpl(options: Browser.NewContextOptions?): BrowserContextImpl
+    {
+        var options = options
+        if (options == null)
+        {
+            options = Browser.NewContextOptions()
+        } else
+        {
+            // Make a copy so that we can nullify some fields below.
+            options = Utils.convertType<Browser.NewContextOptions?, Browser.NewContextOptions?>(
+                options, Browser.NewContextOptions::class.java
+            )
+        }
+        if (options.storageStatePath != null)
+        {
+            try
+            {
+                val bytes = Files.readAllBytes(options.storageStatePath)
+                options.storageState = String(bytes, StandardCharsets.UTF_8)
+                options.storageStatePath = null
+            } catch (e: IOException)
+            {
+                throw PlaywrightException("Failed to read storage state from file", e)
+            }
+        }
+        var storageState: JsonObject? = null
+        if (options.storageState != null)
+        {
+            storageState = Gson().fromJson<JsonObject?>(options.storageState, JsonObject::class.java)
+            options.storageState = null
+        }
+        var recordHar: JsonObject? = null
+        val recordHarPath = options.recordHarPath
+        var harContentPolicy: HarContentPolicy? = null
+        if (options.recordHarPath != null)
+        {
+            recordHar = JsonObject()
+            recordHar.addProperty("path", options.recordHarPath.toString())
+            if (options.recordHarContent != null)
+            {
+                harContentPolicy = options.recordHarContent
+            } else if (options.recordHarOmitContent != null && options.recordHarOmitContent)
+            {
+                harContentPolicy = HarContentPolicy.OMIT
+            }
+            if (harContentPolicy != null)
+            {
+                recordHar.addProperty("content", harContentPolicy.name.lowercase(Locale.getDefault()))
+            }
+            if (options.recordHarMode != null)
+            {
+                recordHar.addProperty("mode", options.recordHarMode.name.lowercase(Locale.getDefault()))
+            }
+            Serialization.addHarUrlFilter(recordHar, options.recordHarUrlFilter)
+            options.recordHarPath = null
+            options.recordHarMode = null
+            options.recordHarOmitContent = null
+            options.recordHarContent = null
+            options.recordHarUrlFilter = null
+        } else
+        {
+            if (options.recordHarOmitContent != null)
+            {
+                throw PlaywrightException("recordHarOmitContent is set but recordHarPath is null")
+            }
+            if (options.recordHarUrlFilter != null)
+            {
+                throw PlaywrightException("recordHarUrlFilter is set but recordHarPath is null")
+            }
+            if (options.recordHarMode != null)
+            {
+                throw PlaywrightException("recordHarMode is set but recordHarPath is null")
+            }
+            if (options.recordHarContent != null)
+            {
+                throw PlaywrightException("recordHarContent is set but recordHarPath is null")
+            }
+        }
 
-  private byte[] stopTracingImpl() {
-    JsonObject json = sendMessage("stopTracing").getAsJsonObject();
-    ArtifactImpl artifact = connection.getExistingObject(json.getAsJsonObject().getAsJsonObject("artifact").get("guid").getAsString());
-    byte[] data = artifact.readAllBytes();
-    artifact.delete();
-    if (tracePath != null) {
-      try {
-        Files.createDirectories(tracePath.getParent());
-        Files.write(tracePath, data);
-      } catch (IOException e) {
-        throw new PlaywrightException("Failed to write trace file", e);
-      } finally {
-        tracePath = null;
-      }
+        val params = Serialization.gson().toJsonTree(options).getAsJsonObject()
+        if (storageState != null)
+        {
+            params.add("storageState", storageState)
+        }
+        if (recordHar != null)
+        {
+            params.add("recordHar", recordHar)
+        }
+        if (options.recordVideoDir != null)
+        {
+            val recordVideo = JsonObject()
+            recordVideo.addProperty("dir", options.recordVideoDir.toAbsolutePath().toString())
+            if (options.recordVideoSize != null)
+            {
+                recordVideo.add("size", Serialization.gson().toJsonTree(options.recordVideoSize))
+            }
+            params.remove("recordVideoDir")
+            params.remove("recordVideoSize")
+            params.add("recordVideo", recordVideo)
+        } else if (options.recordVideoSize != null)
+        {
+            throw PlaywrightException("recordVideoSize is set but recordVideoDir is null")
+        }
+        if (options.viewportSize != null)
+        {
+            if (options.viewportSize.isPresent())
+            {
+                val size = params.get("viewportSize")
+                params.remove("viewportSize")
+                params.add("viewport", size)
+            } else
+            {
+                params.remove("viewportSize")
+                params.addProperty("noDefaultViewport", true)
+            }
+        }
+        Utils.addToProtocol(params, options.clientCertificates)
+        params.remove("acceptDownloads")
+        if (options.acceptDownloads != null)
+        {
+            params.addProperty("acceptDownloads", if (options.acceptDownloads) "accept" else "deny")
+        }
+        val result = sendMessage("newContext", params)
+        val context: BrowserContextImpl = connection?.getExistingObject<BrowserContextImpl?>(
+            result?.getAsJsonObject()?.getAsJsonObject("context")?.get("guid")?.getAsString()
+        )!!
+        context.videosDir = options.recordVideoDir
+        if (options.baseURL != null)
+        {
+            context.setBaseUrl(options.baseURL)
+        }
+        context.setRecordHar(recordHarPath, harContentPolicy)
+        if (launchOptions != null)
+        {
+            context.tracing().setTracesDir(launchOptions!!.tracesDir)
+        }
+        contexts.add(context)
+        return context
     }
-    return data;
-  }
 
-  private Page newPageImpl(NewPageOptions options) {
-    BrowserContextImpl context = newContext(convertType(options, NewContextOptions.class));
-    PageImpl page = context.newPage();
-    page.ownedContext = context;
-    context.ownerPage = page;
-    return page;
-  }
-
-  private String name() {
-    return initializer.get("name").getAsString();
-  }
-
-  boolean isChromium() {
-    return "chromium".equals(name());
-  }
-
-  @Override
-  public String version() {
-    return initializer.get("version").getAsString();
-  }
-
-  // used to be protected, set later
-  @Override
-  public void handleEvent(String event, JsonObject parameters) {
-    if ("close".equals(event)) {
-      didClose();
+    override fun newPage(options: NewPageOptions?): Page?
+    {
+        return withLogging<Page?>("Browser.newPage", Supplier { newPageImpl(options) })
     }
-  }
 
-  @Override
-  public CDPSession newBrowserCDPSession() {
-    JsonObject params = new JsonObject();
-    JsonObject result = sendMessage("newBrowserCDPSession", params).getAsJsonObject();
-    return connection.getExistingObject(result.getAsJsonObject("session").get("guid").getAsString());
-  }
+    override fun startTracing(page: Page?, options: StartTracingOptions?)
+    {
+        withLogging("Browser.startTracing", Runnable { startTracingImpl(page, options) })
+    }
 
-  private void didClose() {
-    isConnected = false;
-    listeners.notify(EventType.DISCONNECTED, this);
-  }
+    private fun startTracingImpl(page: Page?, options: StartTracingOptions?)
+    {
+        var options = options
+        if (options == null)
+        {
+            options = StartTracingOptions()
+        }
+        tracePath = options.path
+        val params = Serialization.gson().toJsonTree(options).getAsJsonObject()
+        if (page != null)
+        {
+            params.add("page", (page as PageImpl).toProtocolRef())
+        }
+        sendMessage("startTracing", params)
+    }
+
+    override fun stopTracing(): ByteArray?
+    {
+        return withLogging<ByteArray?>("Browser.stopTracing", Supplier { stopTracingImpl() })
+    }
+
+    private fun stopTracingImpl(): ByteArray?
+    {
+        val json = sendMessage("stopTracing")!!.getAsJsonObject()
+        val artifact = connection!!.getExistingObject<ArtifactImpl?>(
+            json.getAsJsonObject().getAsJsonObject("artifact").get("guid").getAsString()
+        )
+        val data = artifact!!.readAllBytes()
+        artifact.delete()
+        if (tracePath != null)
+        {
+            try
+            {
+                Files.createDirectories(tracePath!!.getParent())
+                Files.write(tracePath, data)
+            } catch (e: IOException)
+            {
+                throw PlaywrightException("Failed to write trace file", e)
+            } finally
+            {
+                tracePath = null
+            }
+        }
+        return data
+    }
+
+    private fun newPageImpl(options: NewPageOptions?): Page
+    {
+        val context = newContext(
+            Utils.convertType<NewPageOptions?, Browser.NewContextOptions?>(
+                options, Browser.NewContextOptions::class.java
+            )
+        )
+        val page = context!!.newPage()
+        page.ownedContext = context
+        context.ownerPage = page
+        return page
+    }
+
+    private fun name(): String?
+    {
+        return initializer!!.get("name").getAsString()
+    }
+
+    val isChromium: Boolean
+        get() = "chromium" == name()
+
+    override fun version(): String?
+    {
+        return initializer!!.get("version").getAsString()
+    }
+
+    // used to be protected, set later
+    public override fun handleEvent(event: String?, parameters: JsonObject?)
+    {
+        if ("close" == event)
+        {
+            didClose()
+        }
+    }
+
+    override fun newBrowserCDPSession(): CDPSession?
+    {
+        val params = JsonObject()
+        val result = sendMessage("newBrowserCDPSession", params)!!.getAsJsonObject()
+        return connection!!.getExistingObject<CDPSession?>(result.getAsJsonObject("session").get("guid").getAsString())
+    }
+
+    private fun didClose()
+    {
+        isConnected = false
+        listeners.notify<BrowserImpl?>(EventType.DISCONNECTED, this)
+    }
 }
