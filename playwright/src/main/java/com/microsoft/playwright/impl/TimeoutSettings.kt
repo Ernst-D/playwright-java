@@ -13,71 +13,65 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.microsoft.playwright.impl
 
-package com.microsoft.playwright.impl;
+internal class TimeoutSettings @JvmOverloads constructor(private val parent: TimeoutSettings? = null) {
+    private var defaultTimeout: Double? = null
+    private var defaultNavigationTimeout: Double? = null
 
-class TimeoutSettings {
-  private static final int DEFAULT_TIMEOUT_MS = 30_000;
-
-  private final TimeoutSettings parent;
-  private Double defaultTimeout ;
-  private Double defaultNavigationTimeout;
-
-  TimeoutSettings() {
-    this(null);
-  }
-  TimeoutSettings(TimeoutSettings parent) {
-    this.parent = parent;
-  }
-
-  Double defaultTimeout() {
-    return defaultTimeout;
-  }
-  Double defaultNavigationTimeout() {
-    return defaultNavigationTimeout;
-  }
-
-  void setDefaultTimeout(Double timeout) {
-    defaultTimeout = timeout;
-  }
-
-  void setDefaultNavigationTimeout(Double timeout) {
-    defaultNavigationTimeout = timeout;
-  }
-
-  double timeout(Double timeout) {
-    if (timeout != null) {
-      return timeout;
+    fun defaultTimeout(): Double? {
+        return defaultTimeout
     }
-    if (defaultTimeout != null) {
-      return defaultTimeout;
-    }
-    if (parent != null) {
-      return parent.timeout(timeout);
-    }
-    return DEFAULT_TIMEOUT_MS;
-  }
 
-  double navigationTimeout(Double timeout) {
-    if (timeout != null) {
-      return timeout;
+    fun defaultNavigationTimeout(): Double? {
+        return defaultNavigationTimeout
     }
-    if (defaultNavigationTimeout != null) {
-      return defaultNavigationTimeout;
-    }
-    if (defaultTimeout != null) {
-      return defaultTimeout;
-    }
-    if (parent != null) {
-      return parent.navigationTimeout(timeout);
-    }
-    return DEFAULT_TIMEOUT_MS;
-  }
 
-  <T> Waitable<T> createWaitable(Double timeout) {
-    if (timeout != null && timeout == 0) {
-      return new WaitableNever<>();
+    fun setDefaultTimeout(timeout: Double?) {
+        defaultTimeout = timeout
     }
-    return new WaitableTimeout<>(timeout(timeout));
-  }
+
+    fun setDefaultNavigationTimeout(timeout: Double?) {
+        defaultNavigationTimeout = timeout
+    }
+
+    fun timeout(timeout: Double?): Double {
+        if (timeout != null) {
+            return timeout
+        }
+        if (defaultTimeout != null) {
+            return defaultTimeout!!
+        }
+        if (parent != null) {
+            return parent.timeout(timeout)
+        }
+        return DEFAULT_TIMEOUT_MS.toDouble()
+    }
+
+    fun navigationTimeout(timeout: Double?): Double {
+        if (timeout != null) {
+            return timeout
+        }
+        if (defaultNavigationTimeout != null) {
+            return defaultNavigationTimeout!!
+        }
+        if (defaultTimeout != null) {
+            return defaultTimeout!!
+        }
+        if (parent != null) {
+            return parent.navigationTimeout(timeout)
+        }
+        return DEFAULT_TIMEOUT_MS.toDouble()
+    }
+
+    fun <T> createWaitable(timeout: Double?): Waitable<T?> {
+        if (timeout != null && timeout == 0.0) {
+            return WaitableNever<T?>()
+        }
+        return WaitableTimeout<T?>(timeout(timeout))
+    }
+
+    companion object {
+        private const val DEFAULT_TIMEOUT_MS = 30000
+    }
 }
